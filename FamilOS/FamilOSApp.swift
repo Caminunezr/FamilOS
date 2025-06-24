@@ -6,27 +6,28 @@
 //
 
 import SwiftUI
-import SwiftData
 
 @main
 struct FamilOSApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
-
+    @StateObject private var authViewModel = AuthViewModel()
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(authViewModel)
+                .preferredColorScheme(colorScheme)
         }
-        .modelContainer(sharedModelContainer)
+        .windowStyle(.titleBar)
+        .windowResizability(.contentSize)
+    }
+    
+    // Implementación básica para preferencia de tema
+    private var colorScheme: ColorScheme? {
+        let temaModo = UserDefaults.standard.integer(forKey: "tema")
+        switch temaModo {
+        case 1: return .light
+        case 2: return .dark
+        default: return nil // Seguir tema del sistema
+        }
     }
 }
