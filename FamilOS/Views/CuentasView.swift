@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct CuentasView: View {
     @StateObject var viewModel = CuentasViewModel()
@@ -18,7 +19,7 @@ struct CuentasView: View {
             }
         }
         .sheet(isPresented: $mostrarFormularioNuevaCuenta) {
-            NuevaCuentaView(viewModel: viewModel)
+            NuevaCuentaView(viewModel: viewModel, mostrarFormulario: $mostrarFormularioNuevaCuenta)
         }
         .onAppear {
             viewModel.cargarDatosEjemplo()
@@ -1947,6 +1948,7 @@ struct CuentaCronologicaView: View {
 
 struct NuevaCuentaView: View {
     @ObservedObject var viewModel: CuentasViewModel
+    @Binding var mostrarFormulario: Bool
     @Environment(\.dismiss) var dismiss
     
     @State private var monto: String = ""
@@ -1960,6 +1962,7 @@ struct NuevaCuentaView: View {
     @State private var nombre: String = ""
     @State private var mostrandoError: Bool = false
     @State private var mensajeError: String = ""
+    @State private var creandoCuenta: Bool = false
     
     private var categoriasDisponibles: [String] {
         return Cuenta.CategoriasCuentas.allCases.map { $0.rawValue }
@@ -2002,18 +2005,27 @@ struct NuevaCuentaView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") {
-                        dismiss()
+                        cerrarModal()
                     }
                     .foregroundColor(.white)
+                    .disabled(creandoCuenta)
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Crear Cuenta") {
-                        crearCuenta()
+                    HStack {
+                        if creandoCuenta {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        }
+                        
+                        Button(creandoCuenta ? "Creando..." : "Crear Cuenta") {
+                            crearCuenta()
+                        }
+                        .disabled(!esFormularioValido || creandoCuenta)
+                        .foregroundColor(esFormularioValido && !creandoCuenta ? .white : .gray)
+                        .fontWeight(.semibold)
                     }
-                    .disabled(!esFormularioValido)
-                    .foregroundColor(esFormularioValido ? .white : .gray)
-                    .fontWeight(.semibold)
                 }
             }
         }
@@ -2160,6 +2172,12 @@ struct NuevaCuentaView: View {
                     .font(.headline)
                 
                 TextField("0.00", text: valor)
+                    .onReceive(valor.wrappedValue.publisher.collect()) {
+                        let filtered = String($0.filter { "0123456789.".contains($0) })
+                        if filtered != valor.wrappedValue {
+                            valor.wrappedValue = filtered
+                        }
+                    }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -2276,31 +2294,61 @@ struct NuevaCuentaView: View {
     
     // MARK: - Lógica de creación
     private func crearCuenta() {
+        creandoCuenta = true
+        
         guard let montoDouble = Double(monto), montoDouble > 0 else {
             mostrarError("El monto debe ser un número válido mayor a 0")
+            creandoCuenta = false
             return
         }
         
         let proveedorLimpio = proveedor.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !proveedorLimpio.isEmpty else {
             mostrarError("El proveedor es obligatorio")
+            creandoCuenta = false
+            return
+        }
+        
+        guard !categoriaFinal.isEmpty else {
+            mostrarError("La categoría es obligatoria")
+            creandoCuenta = false
             return
         }
         
         let nuevaCuenta = Cuenta(
             monto: montoDouble,
             proveedor: proveedorLimpio,
-            fechaEmision: usarFechaEmision ? fechaEmision : nil,
             fechaVencimiento: fechaVencimiento,
             categoria: categoriaFinal,
-            descripcion: descripcion.trimmingCharacters(in: .whitespacesAndNewlines),
             creador: "Usuario",
-            nombre: nombre.trimmingCharacters(in: .whitespacesAndNewlines),
-            estado: .pendiente
+            fechaEmision: usarFechaEmision ? fechaEmision : nil,
+            descripcion: descripcion.trimmingCharacters(in: .whitespacesAndNewlines),
+            nombre: nombre.trimmingCharacters(in: .whitespacesAndNewlines)
         )
         
         viewModel.agregarCuenta(nuevaCuenta)
+        creandoCuenta = false
+        cerrarModal()
+    }
+    
+    private func cerrarModal() {
+        // Limpiar el formulario al cerrar
+        limpiarFormulario()
+        mostrarFormulario = false
         dismiss()
+    }
+    
+    private func limpiarFormulario() {
+        monto = ""
+        proveedor = ""
+        fechaVencimiento = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
+        fechaEmision = Date()
+        usarFechaEmision = false
+        categoria = "Luz"
+        categoriaPersonalizada = ""
+        descripcion = ""
+        nombre = ""
+        creandoCuenta = false
     }
     
     private func mostrarError(_ mensaje: String) {
