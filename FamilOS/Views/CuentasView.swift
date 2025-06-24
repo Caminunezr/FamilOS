@@ -1999,7 +1999,6 @@ struct NuevaCuentaView: View {
                 }
             }
             .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") {
@@ -2161,7 +2160,6 @@ struct NuevaCuentaView: View {
                     .font(.headline)
                 
                 TextField("0.00", text: valor)
-                    .keyboardType(.decimalPad)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
