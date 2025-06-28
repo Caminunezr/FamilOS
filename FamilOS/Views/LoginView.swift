@@ -111,7 +111,7 @@ struct LoginView: View {
             // Características destacadas
             VStack(alignment: .leading, spacing: 16) {
                 featureRow(icon: "shield.checkerboard", text: "Seguridad avanzada")
-                featureRow(icon: "chart.bar.fill", text: "Análisis inteligente")
+                featureRow(icon: "chart.bar.fill", text: "Análasis inteligente")
                 featureRow(icon: "person.2.fill", text: "Colaboración familiar")
                 featureRow(icon: "icloud.fill", text: "Sincronización en la nube")
             }

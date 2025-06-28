@@ -465,8 +465,12 @@ class CuentasViewModel: ObservableObject {
             let mesesCuentas = mesesGrouped.map { mes, cuentas in
                 MesCuentas(
                     mes: mes,
+                    año: añoCuentas.año,
                     nombreMes: DateFormatter().monthSymbols[mes - 1],
-                    cuentas: cuentas.sorted { $0.fechaVencimiento < $1.fechaVencimiento }
+                    cuentas: cuentas.sorted { $0.fechaVencimiento < $1.fechaVencimiento },
+                    totalCuentas: cuentas.count,
+                    totalMonto: cuentas.reduce(0) { $0 + $1.monto },
+                    cuentasPagadas: cuentas.filter { $0.estado == .pagada }.count
                 )
             }.sorted { $0.mes > $1.mes }
             
@@ -485,35 +489,80 @@ class CuentasViewModel: ObservableObject {
             cuentasAFiltrar = cuentas
         }
         
-        return agruparCuentasPorAñoYMes(cuentasAFiltrar)
+        return agruparCuentasPorAñoYMesOrdenado(cuentasAFiltrar)
     }
     
-    // Función auxiliar para agrupar cuentas filtradas
-    private func agruparCuentasPorAñoYMes(_ cuentasFiltradas: [Cuenta]) -> [AñoCuentas] {
-        let calendar = Calendar.current
+    // Función auxiliar mejorada con ordenamiento cronológico inverso
+    private func agruparCuentasPorAñoYMesOrdenado(_ cuentasFiltradas: [Cuenta]) -> [AñoCuentas] {
+        let calendario = Calendar.current
+        let fechaActual = Date()
+        let añoActual = calendario.component(.year, from: fechaActual)
+        let mesActual = calendario.component(.month, from: fechaActual)
+        
+        // Agrupar por año
         let cuentasAgrupadas = Dictionary(grouping: cuentasFiltradas) { cuenta in
-            calendar.component(.year, from: cuenta.fechaVencimiento)
+            calendario.component(.year, from: cuenta.fechaVencimiento)
         }
         
-        return cuentasAgrupadas.map { año, cuentasDelAño in
+        return cuentasAgrupadas.compactMap { año, cuentasDelAño in
+            // Agrupar por mes dentro del año
             let mesesAgrupados = Dictionary(grouping: cuentasDelAño) { cuenta in
-                calendar.component(.month, from: cuenta.fechaVencimiento)
+                calendario.component(.month, from: cuenta.fechaVencimiento)
             }
             
-            let meses = mesesAgrupados.map { mes, cuentasDelMes in
-                MesCuentas(
+            let meses = mesesAgrupados.compactMap { (mes: Int, cuentasDelMes: [Cuenta]) -> MesCuentas? in
+                guard mes >= 1 && mes <= 12 else { return nil }
+                let nombreMes = DateFormatter().monthSymbols[mes - 1]
+                
+                return MesCuentas(
                     mes: mes,
-                    nombreMes: DateFormatter().monthSymbols[mes - 1],
-                    cuentas: cuentasDelMes.sorted { $0.fechaVencimiento < $1.fechaVencimiento }
+                    año: año,
+                    nombreMes: nombreMes,
+                    cuentas: cuentasDelMes.sorted { $0.fechaVencimiento < $1.fechaVencimiento },
+                    totalCuentas: cuentasDelMes.count,
+                    totalMonto: cuentasDelMes.reduce(0) { $0 + $1.monto },
+                    cuentasPagadas: cuentasDelMes.filter { $0.estado == .pagada }.count
                 )
-            }.sorted { $0.mes < $1.mes }
+            }
+            
+            // Ordenar meses cronológicamente inverso (más reciente primero)
+            let mesesOrdenados = meses.sorted { mes1, mes2 in
+                // Si son del mismo año, ordenar por mes (más reciente primero)
+                if mes1.año == mes2.año {
+                    return ordenarMesesCronologicamente(mes1: mes1.mes, mes2: mes2.mes, añoActual: añoActual, mesActual: mesActual)
+                }
+                // Años más recientes primero
+                return mes1.año > mes2.año
+            }
             
             return AñoCuentas(
                 año: año,
-                cuentas: cuentasDelAño.sorted { $0.fechaVencimiento < $1.fechaVencimiento },
-                meses: meses
+                cuentas: cuentasDelAño,
+                meses: mesesOrdenados,
+                totalCuentas: cuentasDelAño.count,
+                totalMonto: cuentasDelAño.reduce(0) { $0 + $1.monto },
+                cuentasPagadas: cuentasDelAño.filter { $0.estado == .pagada }.count,
+                cuentasPendientes: cuentasDelAño.filter { $0.estado == .pendiente }.count
             )
-        }.sorted { $0.año > $1.año }
+        }
+        .sorted { $0.año > $1.año } // Años más recientes primero
+    }
+    
+    // Función auxiliar para ordenar meses cronológicamente
+    private func ordenarMesesCronologicamente(mes1: Int, mes2: Int, añoActual: Int, mesActual: Int) -> Bool {
+        // Calcular "distancia" desde el mes actual
+        let distancia1 = calcularDistanciaDesdeMesActual(mes: mes1, mesActual: mesActual)
+        let distancia2 = calcularDistanciaDesdeMesActual(mes: mes2, mesActual: mesActual)
+        
+        return distancia1 < distancia2
+    }
+    
+    private func calcularDistanciaDesdeMesActual(mes: Int, mesActual: Int) -> Int {
+        if mes <= mesActual {
+            return mesActual - mes  // Meses del año actual (0 = mes actual)
+        } else {
+            return (12 - mes) + mesActual + 12  // Meses del año anterior
+        }
     }
     
     // Cuentas del año seleccionado
@@ -543,41 +592,31 @@ struct AñoCuentas: Identifiable {
     let año: Int
     let cuentas: [Cuenta]
     var meses: [MesCuentas] = []
+    let totalCuentas: Int
+    let totalMonto: Double
+    let cuentasPagadas: Int
+    let cuentasPendientes: Int
     
-    var totalMonto: Double {
-        cuentas.reduce(0) { $0 + $1.monto }
-    }
-    
-    var totalCuentas: Int {
-        cuentas.count
-    }
-    
-    var cuentasPagadas: Int {
-        cuentas.filter { $0.estado == .pagada }.count
-    }
-    
-    var cuentasPendientes: Int {
-        cuentas.filter { $0.estado == .pendiente }.count
+    init(año: Int, cuentas: [Cuenta], meses: [MesCuentas] = [], totalCuentas: Int? = nil, totalMonto: Double? = nil, cuentasPagadas: Int? = nil, cuentasPendientes: Int? = nil) {
+        self.año = año
+        self.cuentas = cuentas
+        self.meses = meses
+        self.totalCuentas = totalCuentas ?? cuentas.count
+        self.totalMonto = totalMonto ?? cuentas.reduce(0) { $0 + $1.monto }
+        self.cuentasPagadas = cuentasPagadas ?? cuentas.filter { $0.estado == .pagada }.count
+        self.cuentasPendientes = cuentasPendientes ?? cuentas.filter { $0.estado == .pendiente }.count
     }
 }
 
 struct MesCuentas: Identifiable {
     let id = UUID()
     let mes: Int
+    let año: Int
     let nombreMes: String
     let cuentas: [Cuenta]
-    
-    var totalMonto: Double {
-        cuentas.reduce(0) { $0 + $1.monto }
-    }
-    
-    var totalCuentas: Int {
-        cuentas.count
-    }
-    
-    var cuentasPagadas: Int {
-        cuentas.filter { $0.estado == .pagada }.count
-    }
+    let totalCuentas: Int
+    let totalMonto: Double
+    let cuentasPagadas: Int
     
     var cuentasPendientes: Int {
         cuentas.filter { $0.estado == .pendiente }.count

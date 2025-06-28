@@ -2,6 +2,117 @@ import Foundation
 import SwiftUI
 import Combine
 
+// MARK: - Estructuras para el cruce de datos
+struct CategoriaFinanciera: Identifiable {
+    let id = UUID()
+    let nombre: String
+    let icono: String
+    let presupuestoMensual: Double
+    let gastoActual: Double
+    let gastoProyectado: Double
+    let porcentajeUsado: Double
+    let estado: EstadoPresupuesto
+    let cuentasPendientes: Int
+    let cuentasPagadas: Int
+    
+    var diferencia: Double {
+        presupuestoMensual - gastoActual
+    }
+    
+    var proyeccionFinal: Double {
+        gastoActual + gastoProyectado
+    }
+    
+    var excedeProyeccion: Bool {
+        proyeccionFinal > presupuestoMensual
+    }
+}
+
+enum EstadoPresupuesto: CaseIterable {
+    case enRango        // < 70% del presupuesto
+    case atencion       // 70-90% del presupuesto
+    case cerca          // 90-100% del presupuesto
+    case excedido       // > 100% del presupuesto
+    case sinPresupuesto // No hay límite definido
+    
+    var color: Color {
+        switch self {
+        case .enRango: return .green
+        case .atencion: return .yellow
+        case .cerca: return .orange
+        case .excedido: return .red
+        case .sinPresupuesto: return .gray
+        }
+    }
+    
+    var mensaje: String {
+        switch self {
+        case .enRango: return "En rango"
+        case .atencion: return "Atención"
+        case .cerca: return "Cerca del límite"
+        case .excedido: return "Excedido"
+        case .sinPresupuesto: return "Sin presupuesto"
+        }
+    }
+    
+    var icono: String {
+        switch self {
+        case .enRango: return "checkmark.circle.fill"
+        case .atencion: return "exclamationmark.triangle.fill"
+        case .cerca: return "exclamationmark.triangle.fill"
+        case .excedido: return "xmark.circle.fill"
+        case .sinPresupuesto: return "questionmark.circle.fill"
+        }
+    }
+}
+
+struct ResumenFinancieroIntegrado {
+    let presupuestoTotal: Double
+    let gastoActual: Double
+    let gastoProyectado: Double
+    let disponible: Double
+    let porcentajeUsado: Double
+    let categorias: [CategoriaFinanciera]
+    let alertas: [AlertaFinanciera]
+    
+    var excedePresupuesto: Bool {
+        gastoActual > presupuestoTotal
+    }
+    
+    var proyeccionExcede: Bool {
+        (gastoActual + gastoProyectado) > presupuestoTotal
+    }
+}
+
+struct AlertaFinanciera: Identifiable {
+    let id = UUID()
+    let tipo: TipoAlerta
+    let mensaje: String
+    let categoria: String?
+    let urgencia: NivelUrgencia
+    
+    enum TipoAlerta {
+        case presupuestoExcedido
+        case cercaDelLimite
+        case proyeccionExcede
+        case sinPresupuesto
+        case vencimientoProximo
+    }
+    
+    enum NivelUrgencia {
+        case bajo, medio, alto, critico
+        
+        var color: Color {
+            switch self {
+            case .bajo: return .blue
+            case .medio: return .yellow
+            case .alto: return .orange
+            case .critico: return .red
+            }
+        }
+    }
+}
+
 class PresupuestoViewModel: ObservableObject {
     @Published var presupuestos: [PresupuestoMensual] = []
     @Published var aportes: [Aporte] = []
@@ -9,6 +120,31 @@ class PresupuestoViewModel: ObservableObject {
     @Published var mesSeleccionado: Date = Date()
     @Published var mostrarMesesAnteriores: Bool = false
     
+    // MARK: - Nuevas propiedades para integración con cuentas
+    @Published var presupuestosPorCategoria: [String: Double] = [:]
+    private var cuentasViewModel: CuentasViewModel?
+    
+    // MARK: - Configuración de integración
+    func configurarIntegracionCuentas(_ cuentasVM: CuentasViewModel) {
+        self.cuentasViewModel = cuentasVM
+        cargarPresupuestosPorCategoriaEjemplo()
+    }
+    
+    private func cargarPresupuestosPorCategoriaEjemplo() {
+        presupuestosPorCategoria = [
+            "Luz": 1200.0,
+            "Agua": 400.0,
+            "Gas": 500.0,
+            "Internet": 600.0,
+            "Arriendo": 8500.0,
+            "Alimentación": 3000.0,
+            "Transporte": 1500.0,
+            "Salud": 800.0,
+            "Entretenimiento": 1000.0,
+            "Otros": 500.0
+        ]
+    }
+
     // Propiedades calculadas
     var presupuestoActual: PresupuestoMensual? {
         let calendar = Calendar.current

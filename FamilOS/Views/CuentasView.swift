@@ -13,7 +13,7 @@ struct CuentasView: View {
             dashboardSidebar
         } detail: {
             if let cuenta = cuentaSeleccionada {
-                CuentaDetalleView(cuenta: cuenta, viewModel: viewModel)
+                CuentaDetalleView(cuenta: cuenta, viewModel: viewModel, cuentaSeleccionada: $cuentaSeleccionada)
             } else {
                 dashboardPrincipal
             }
@@ -30,6 +30,9 @@ struct CuentasView: View {
     private var dashboardSidebar: some View {
         ScrollView {
             VStack(spacing: 20) {
+                // Navegación principal - Dashboard Home
+                navegacionDashboard
+                
                 // Header con navegación temporal
                 navegacionTemporal
                 
@@ -69,6 +72,69 @@ struct CuentasView: View {
         }
     }
     
+    // MARK: - Navegación Dashboard
+    private var navegacionDashboard: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        cuentaSeleccionada = nil
+                    }
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: cuentaSeleccionada == nil ? "house.fill" : "house")
+                            .font(.system(size: 16, weight: .medium))
+                        
+                        Text("Dashboard")
+                            .font(.subheadline.weight(.medium))
+                        
+                        if cuentaSeleccionada != nil {
+                            Image(systemName: "arrow.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .foregroundColor(cuentaSeleccionada == nil ? .blue : .primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(cuentaSeleccionada == nil ? Color.blue.opacity(0.1) : Color.clear)
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                Spacer()
+                
+                if let cuenta = cuentaSeleccionada {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(cuenta.nombre.isEmpty ? cuenta.proveedor : cuenta.nombre)
+                            .font(.caption.weight(.medium))
+                            .lineLimit(1)
+                        
+                        Text("$\(cuenta.monto, specifier: "%.0f")")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            
+            if cuentaSeleccionada != nil {
+                Divider()
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.gray.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                )
+        )
+    }
+    
     // MARK: - Navegación Temporal
     private var navegacionTemporal: some View {
         VStack(spacing: 12) {
@@ -79,6 +145,25 @@ struct CuentasView: View {
                     .fontWeight(.semibold)
                 
                 Spacer()
+                
+                // Botón para ir al mes actual
+                Button(action: {
+                    // Scroll automático al mes actual si es necesario
+                    print("Navegando al mes actual")
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "calendar.circle")
+                            .foregroundColor(.blue)
+                        Text("Mes Actual")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(8)
+                }
+                .buttonStyle(PlainButtonStyle())
                 
                 Image(systemName: "calendar.circle.fill")
                     .foregroundColor(.blue)
@@ -362,6 +447,9 @@ struct CuentasView: View {
     private var dashboardPrincipal: some View {
         ScrollView {
             LazyVStack(spacing: 20) {
+                // Header de navegación mejorado
+                dashboardHeader
+                
                 // Header con estadísticas
                 estadisticasGenerales
                 
@@ -377,6 +465,84 @@ struct CuentasView: View {
             .padding()
         }
         .navigationTitle("Dashboard Principal")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                if cuentaSeleccionada != nil {
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            cuentaSeleccionada = nil
+                        }
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.left")
+                            Text("Volver")
+                        }
+                        .foregroundColor(.blue)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+        }
+    }
+    
+    // MARK: - Dashboard Header
+    private var dashboardHeader: some View {
+        VStack(spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Estadísticas Financieras")
+                        .font(.title.weight(.bold))
+                    
+                    Text("Resumen de tu gestión mensual")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                // Botón de navegación a las cuentas
+                Button(action: {
+                    // No hacemos nada aquí, solo visual
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "list.bullet.rectangle")
+                            .font(.system(size: 16, weight: .medium))
+                        
+                        Text("Ver Cuentas")
+                            .font(.subheadline.weight(.medium))
+                        
+                        Image(systemName: "arrow.right")
+                            .font(.caption)
+                    }
+                    .foregroundColor(.blue)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.blue.opacity(0.1))
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            
+            // Indicador de mes actual
+            HStack {
+                Image(systemName: "calendar")
+                    .foregroundColor(.blue)
+                
+                Text("Datos del mes actual: \(Date().formatted(.dateTime.month(.wide).year()))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+                
+                Text("Actualizado ahora")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            
+            Divider()
+        }
     }
     
     // MARK: - Estadísticas Generales
@@ -788,6 +954,7 @@ struct CuentaItemView: View {
 struct CuentaDetalleView: View {
     let cuenta: Cuenta
     @ObservedObject var viewModel: CuentasViewModel
+    @Binding var cuentaSeleccionada: Cuenta?
     @State private var mostrarFormularioPago = false
     @State private var mostrarVisorArchivos = false
     @State private var mostrarEdicion = false
@@ -823,6 +990,21 @@ struct CuentaDetalleView: View {
             EditarCuentaView(cuenta: cuenta, viewModel: viewModel)
         }
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        cuentaSeleccionada = nil
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.left")
+                        Text("Dashboard")
+                    }
+                    .foregroundColor(.blue)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            
             ToolbarItem(placement: .primaryAction) {
                 Button(action: {
                     mostrarEdicion = true
@@ -1173,86 +1355,355 @@ struct FormularioPagoView: View {
     let cuenta: Cuenta
     @ObservedObject var viewModel: CuentasViewModel
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     
     @State private var montoPago: Double = 0
     @State private var fechaPago: Date = Date()
     @State private var notas: String = ""
     @State private var tieneComprobante: Bool = false
+    @State private var registrandoPago: Bool = false
+    @State private var mostrandoError: Bool = false
+    @State private var mensajeError: String = ""
+    
+    private var esFormularioValido: Bool {
+        montoPago > 0
+    }
     
     var body: some View {
-        NavigationStack {
-            Form {
-                Section(header: Text("Información del Pago")) {
-                    HStack {
-                        Text("Cuenta:")
-                        Spacer()
-                        Text(cuenta.nombre.isEmpty ? cuenta.proveedor : cuenta.nombre)
-                            .foregroundColor(.secondary)
+        ZStack {
+            // Fondo adaptativo
+            backgroundView
+            
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Header
+                        headerSection
+                        
+                        // Formulario principal
+                        formularioSection
                     }
-                    
-                    HStack {
-                        Text("Monto original:")
-                        Spacer()
-                        Text("$\(cuenta.monto, specifier: "%.0f")")
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    HStack {
-                        Text("Monto a pagar:")
-                        TextField("0", value: $montoPago, format: .number)
-                            .multilineTextAlignment(.trailing)
-                    }
-                    
-                    DatePicker("Fecha de pago", selection: $fechaPago, displayedComponents: .date)
+                    .padding(.horizontal, 32)
+                    .padding(.vertical, 24)
                 }
-                
-                Section(header: Text("Detalles Adicionales")) {
-                    TextField("Notas (opcional)", text: $notas, axis: .vertical)
-                        .lineLimit(2...4)
+                .navigationTitle("")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancelar") {
+                            dismiss()
+                        }
+                        .foregroundColor(colorScheme == .dark ? .white : .primary)
+                        .disabled(registrandoPago)
+                    }
                     
-                    Toggle("Tengo comprobante", isOn: $tieneComprobante)
-                }
-                
-                if montoPago != cuenta.monto && montoPago > 0 {
-                    Section {
+                    ToolbarItem(placement: .confirmationAction) {
                         HStack {
-                            Text("Diferencia:")
-                            Spacer()
-                            Text("$\(abs(cuenta.monto - montoPago), specifier: "%.0f")")
-                                .foregroundColor(montoPago > cuenta.monto ? .green : .red)
-                            Text(montoPago > cuenta.monto ? "(Sobrepago)" : "(Pago parcial)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            if registrandoPago {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                    .progressViewStyle(CircularProgressViewStyle(tint: colorScheme == .dark ? .white : .blue))
+                            }
+                            
+                            Button(registrandoPago ? "Registrando..." : "Registrar Pago") {
+                                registrarPago()
+                            }
+                            .disabled(!esFormularioValido || registrandoPago)
+                            .foregroundColor(esFormularioValido && !registrandoPago ? 
+                                           (colorScheme == .dark ? .white : .blue) : .gray)
+                            .fontWeight(.semibold)
                         }
                     }
                 }
             }
-            .navigationTitle("Registrar Pago")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") {
-                        dismiss()
-                    }
-                }
-                
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Guardar") {
-                        viewModel.registrarPago(
-                            cuenta: cuenta,
-                            monto: montoPago,
-                            fecha: fechaPago,
-                            notas: notas,
-                            tieneComprobante: tieneComprobante
-                        )
-                        dismiss()
-                    }
-                    .disabled(montoPago <= 0)
-                }
-            }
-            .onAppear {
-                montoPago = cuenta.monto
+        }
+        .onAppear {
+            montoPago = cuenta.monto
+        }
+        .alert("Error", isPresented: $mostrandoError) {
+            Button("OK") { }
+        } message: {
+            Text(mensajeError)
+        }
+    }
+    
+    // MARK: - Fondo adaptativo
+    private var backgroundView: some View {
+        Group {
+            if colorScheme == .dark {
+                // Fondo oscuro con gradiente
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color.black,
+                        Color.gray.opacity(0.8),
+                        Color.black
+                    ]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            } else {
+                // Fondo claro con gradiente suave
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color.blue.opacity(0.1),
+                        Color.white,
+                        Color.blue.opacity(0.05)
+                    ]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
             }
         }
+        .ignoresSafeArea()
+    }
+    
+    // MARK: - Header
+    private var headerSection: some View {
+        VStack(spacing: 16) {
+            // Icono principal
+            Circle()
+                .fill(glassMaterial)
+                .frame(width: 80, height: 80)
+                .overlay(
+                    Image(systemName: "creditcard.fill")
+                        .font(.system(size: 36, weight: .medium))
+                        .foregroundColor(colorScheme == .dark ? .white : .blue)
+                )
+                .shadow(color: shadowColor, radius: 10, x: 0, y: 5)
+            
+            VStack(spacing: 8) {
+                Text("Registrar Pago")
+                    .font(.title.weight(.bold))
+                    .foregroundColor(primaryTextColor)
+                
+                Text("Confirma el pago de tu cuenta")
+                    .font(.subheadline)
+                    .foregroundColor(secondaryTextColor)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+    
+    // MARK: - Formulario
+    private var formularioSection: some View {
+        VStack(spacing: 20) {
+            // Información de la cuenta
+            glassSection(title: "Información de la Cuenta", icon: "doc.text") {
+                VStack(spacing: 16) {
+                    infoRow("Proveedor", value: cuenta.proveedor)
+                    infoRow("Cuenta", value: cuenta.nombre.isEmpty ? "Sin nombre" : cuenta.nombre)
+                    infoRow("Categoría", value: cuenta.categoria)
+                    infoRow("Monto Original", value: String(format: "$%.0f", cuenta.monto))
+                }
+            }
+            
+            // Detalles del pago
+            glassSection(title: "Detalles del Pago", icon: "creditcard") {
+                VStack(spacing: 16) {
+                    glassNumberField("Monto a Pagar", value: $montoPago)
+                    glassDatePicker("Fecha de Pago", selection: $fechaPago)
+                    glassTextEditor("Notas (opcional)", text: $notas)
+                    glassToggle("Tengo comprobante", isOn: $tieneComprobante)
+                }
+            }
+            
+            // Cálculo de diferencia
+            if montoPago != cuenta.monto && montoPago > 0 {
+                glassSection(title: "Resumen", icon: "calculator") {
+                    VStack(spacing: 12) {
+                        let diferencia = abs(cuenta.monto - montoPago)
+                        let esSobrepago = montoPago > cuenta.monto
+                        
+                        HStack {
+                            Text("Diferencia:")
+                                .foregroundColor(secondaryTextColor)
+                            Spacer()
+                            Text(String(format: "$%.0f", diferencia))
+                                .foregroundColor(esSobrepago ? .green : .orange)
+                                .fontWeight(.semibold)
+                        }
+                        
+                        HStack {
+                            Text("Tipo:")
+                                .foregroundColor(secondaryTextColor)
+                            Spacer()
+                            Text(esSobrepago ? "Sobrepago" : "Pago parcial")
+                                .foregroundColor(esSobrepago ? .green : .orange)
+                                .fontWeight(.medium)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Componentes Glass
+    private func glassSection<Content: View>(title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.9) : .blue)
+                Text(title)
+                    .font(.headline.weight(.medium))
+                    .foregroundColor(primaryTextColor)
+                Spacer()
+            }
+            
+            VStack(spacing: 16) {
+                content()
+            }
+            .padding(20)
+            .background(glassMaterial)
+            .cornerRadius(16)
+            .shadow(color: shadowColor, radius: 8, x: 0, y: 4)
+        }
+    }
+    
+    private func infoRow(_ title: String, value: String) -> some View {
+        HStack {
+            Text(title)
+                .foregroundColor(secondaryTextColor)
+            Spacer()
+            Text(value)
+                .foregroundColor(primaryTextColor)
+                .fontWeight(.medium)
+        }
+    }
+    
+    private func glassNumberField(_ title: String, value: Binding<Double>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline.weight(.medium))
+                .foregroundColor(primaryTextColor)
+            
+            HStack {
+                Text("$")
+                    .foregroundColor(secondaryTextColor)
+                    .font(.headline)
+                
+                TextField("0.00", value: value, format: .number)
+                    .font(.headline)
+                    .foregroundColor(primaryTextColor)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(fieldBackground)
+            .cornerRadius(12)
+        }
+    }
+    
+    private func glassDatePicker(_ title: String, selection: Binding<Date>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline.weight(.medium))
+                .foregroundColor(primaryTextColor)
+            
+            DatePicker("", selection: selection, displayedComponents: .date)
+                .datePickerStyle(.compact)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(fieldBackground)
+                .cornerRadius(12)
+        }
+    }
+    
+    private func glassTextEditor(_ title: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline.weight(.medium))
+                .foregroundColor(primaryTextColor)
+            
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(fieldBackground)
+                    .frame(height: 80)
+                
+                if text.wrappedValue.isEmpty {
+                    Text("Agrega notas sobre este pago...")
+                        .foregroundColor(secondaryTextColor.opacity(0.6))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                }
+                
+                TextEditor(text: text)
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
+                    .foregroundColor(primaryTextColor)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+            }
+        }
+    }
+    
+    private func glassToggle(_ title: String, isOn: Binding<Bool>) -> some View {
+        HStack {
+            Text(title)
+                .foregroundColor(primaryTextColor)
+            
+            Spacer()
+            
+            Toggle("", isOn: isOn)
+                .toggleStyle(SwitchToggleStyle(tint: colorScheme == .dark ? .white.opacity(0.8) : .blue))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(fieldBackground)
+        .cornerRadius(12)
+    }
+    
+    // MARK: - Lógica de pago
+    private func registrarPago() {
+        registrandoPago = true
+        
+        guard montoPago > 0 else {
+            mostrarError("El monto debe ser mayor a 0")
+            registrandoPago = false
+            return
+        }
+        
+        viewModel.registrarPago(
+            cuenta: cuenta,
+            monto: montoPago,
+            fecha: fechaPago,
+            notas: notas,
+            tieneComprobante: tieneComprobante
+        )
+        
+        registrandoPago = false
+        dismiss()
+    }
+    
+    private func mostrarError(_ mensaje: String) {
+        mensajeError = mensaje
+        mostrandoError = true
+    }
+    
+    // MARK: - Estilos adaptivos
+    private var glassMaterial: some ShapeStyle {
+        if colorScheme == .dark {
+            return AnyShapeStyle(.ultraThinMaterial.opacity(0.6))
+        } else {
+            return AnyShapeStyle(Color.white.opacity(0.7))
+        }
+    }
+    
+    private var fieldBackground: some ShapeStyle {
+        if colorScheme == .dark {
+            return AnyShapeStyle(Color.white.opacity(0.1))
+        } else {
+            return AnyShapeStyle(Color.gray.opacity(0.1))
+        }
+    }
+    
+    private var primaryTextColor: Color {
+        colorScheme == .dark ? .white : .primary
+    }
+    
+    private var secondaryTextColor: Color {
+        colorScheme == .dark ? .white.opacity(0.7) : .secondary
+    }
+    
+    private var shadowColor: Color {
+        colorScheme == .dark ? .white.opacity(0.1) : .black.opacity(0.1)
     }
 }
 
@@ -1797,8 +2248,8 @@ struct MesSeccionView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Header del mes
-            mesHeader
+            // Header del mes con indicadores temporales
+            mesHeaderMejorado
             
             // Lista de cuentas del mes (expandible)
             if expandido {
@@ -1815,20 +2266,29 @@ struct MesSeccionView: View {
         .padding(.vertical, 8)
     }
     
-    private var mesHeader: some View {
+    private var mesHeaderMejorado: some View {
         Button(action: {
             withAnimation(.spring()) {
                 expandido.toggle()
             }
         }) {
-            HStack(spacing: 8) {
+            HStack(spacing: 12) {
+                // Indicador temporal
+                indicadorTemporal
+                
                 Image(systemName: expandido ? "chevron.down" : "chevron.right")
                     .font(.caption)
                     .foregroundColor(.blue)
                 
-                Text(mesCuentas.nombreMes)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(mesCuentas.nombreMes)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    
+                    Text(etiquetaTemporal)
+                        .font(.caption2)
+                        .foregroundColor(colorEtiquetaTemporal)
+                }
                 
                 Spacer()
                 
@@ -1853,11 +2313,86 @@ struct MesSeccionView: View {
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.gray.opacity(0.05))
+            .padding(.vertical, 10)
+            .background(colorFondoMes)
             .cornerRadius(8)
         }
         .buttonStyle(PlainButtonStyle())
+    }
+    
+    // MARK: - Indicadores temporales
+    private var indicadorTemporal: some View {
+        Circle()
+            .fill(colorIndicadorTemporal)
+            .frame(width: 8, height: 8)
+    }
+    
+    private var etiquetaTemporal: String {
+        let calendar = Calendar.current
+        let ahora = Date()
+        let mesActual = calendar.component(.month, from: ahora)
+        let añoActual = calendar.component(.year, from: ahora)
+        
+        if mesCuentas.año == añoActual {
+            if mesCuentas.mes == mesActual {
+                return "Mes actual"
+            } else if mesCuentas.mes == mesActual - 1 {
+                return "Mes anterior"
+            } else if mesCuentas.mes < mesActual {
+                let diferencia = mesActual - mesCuentas.mes
+                return "Hace \(diferencia) mes\(diferencia > 1 ? "es" : "")"
+            } else {
+                return "Próximo"
+            }
+        } else if mesCuentas.año == añoActual - 1 {
+            return "Año anterior"
+        } else {
+            let diferencia = añoActual - mesCuentas.año
+            return "Hace \(diferencia) año\(diferencia > 1 ? "s" : "")"
+        }
+    }
+    
+    private var colorEtiquetaTemporal: Color {
+        let calendar = Calendar.current
+        let ahora = Date()
+        let mesActual = calendar.component(.month, from: ahora)
+        let añoActual = calendar.component(.year, from: ahora)
+        
+        if mesCuentas.año == añoActual && mesCuentas.mes == mesActual {
+            return .blue  // Mes actual
+        } else if mesCuentas.año == añoActual && mesCuentas.mes == mesActual - 1 {
+            return .orange  // Mes anterior
+        } else {
+            return .secondary  // Meses más antiguos
+        }
+    }
+    
+    private var colorIndicadorTemporal: Color {
+        let calendar = Calendar.current
+        let ahora = Date()
+        let mesActual = calendar.component(.month, from: ahora)
+        let añoActual = calendar.component(.year, from: ahora)
+        
+        if mesCuentas.año == añoActual && mesCuentas.mes == mesActual {
+            return .blue  // Mes actual
+        } else if mesCuentas.año == añoActual && mesCuentas.mes == mesActual - 1 {
+            return .orange  // Mes anterior
+        } else {
+            return .gray  // Meses más antiguos
+        }
+    }
+    
+    private var colorFondoMes: Color {
+        let calendar = Calendar.current
+        let ahora = Date()
+        let mesActual = calendar.component(.month, from: ahora)
+        let añoActual = calendar.component(.year, from: ahora)
+        
+        if mesCuentas.año == añoActual && mesCuentas.mes == mesActual {
+            return Color.blue.opacity(0.1)  // Mes actual destacado
+        } else {
+            return Color.gray.opacity(0.05)  // Fondo normal
+        }
     }
 }
 
