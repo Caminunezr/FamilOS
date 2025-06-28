@@ -317,47 +317,57 @@ struct DashboardIntegradoView: View {
     }
     
     private func topCategoriasChart(_ categorias: [CategoriaPresupuestoAnalisis]) -> some View {
-        VStack(spacing: 8) {
+        let topCategorias = getTopCategorias(categorias)
+        
+        return VStack(spacing: 8) {
             Text("Top Gastos")
                 .font(.subheadline)
                 .fontWeight(.medium)
                 .foregroundColor(primaryTextColor)
             
-            let topCategorias = categorias
-                .filter { $0.gastoActual > 0 }
-                .sorted(by: { $0.gastoActual > $1.gastoActual })
-                .prefix(5)
-            
             VStack(spacing: 4) {
                 ForEach(Array(topCategorias.enumerated()), id: \.offset) { index, categoria in
-                    HStack {
-                        Text("\(index + 1)")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.secondary)
-                            .frame(width: 16)
-                        
-                        Image(systemName: categoria.icono)
-                            .foregroundColor(categoria.estado.color)
-                            .frame(width: 16)
-                        
-                        Text(categoria.nombre)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                        
-                        Spacer()
-                        
-                        Text("$\(Int(categoria.gastoActual))")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundColor(primaryTextColor)
-                    }
+                    topCategoriaRow(index: index, categoria: categoria)
                 }
             }
         }
         .padding()
         .background(Color.gray.opacity(0.05))
+        .cornerRadius(12)
+        .frame(maxWidth: .infinity)
+    }
+    
+    private func getTopCategorias(_ categorias: [CategoriaPresupuestoAnalisis]) -> Array<CategoriaPresupuestoAnalisis>.SubSequence {
+        return categorias
+            .filter { $0.gastoActual > 0 }
+            .sorted(by: { $0.gastoActual > $1.gastoActual })
+            .prefix(5)
+    }
+    
+    private func topCategoriaRow(index: Int, categoria: CategoriaPresupuestoAnalisis) -> some View {
+        HStack {
+            Text("\(index + 1)")
+                .font(.caption2)
+                .fontWeight(.bold)
+                .foregroundColor(.secondary)
+                .frame(width: 16)
+            
+            Image(systemName: categoria.icono)
+                .foregroundColor(CategoriaFinanciera(rawValue: categoria.nombre)?.colorPrimario ?? .blue)
+                .frame(width: 16)
+            
+            Text(categoria.nombre)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+            
+            Spacer()
+            
+            Text("$\(Int(categoria.gastoActual))")
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(primaryTextColor)
+        }
         .cornerRadius(12)
         .frame(maxWidth: .infinity)
     }
@@ -393,150 +403,7 @@ struct DashboardIntegradoView: View {
     }
 }
 
-// MARK: - Componentes auxiliares
-
-struct FinanceCard: View {
-    let titulo: String
-    let valor: Double
-    let icono: String
-    let color: Color
-    @Environment(\.colorScheme) var colorScheme
-    
-    var body: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Image(systemName: icono)
-                    .foregroundColor(color)
-                    .font(.title3)
-                Spacer()
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(titulo)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                Text("$\(Int(valor))")
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .foregroundColor(colorScheme == .dark ? .white : .primary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding()
-        .background(Color.gray.opacity(0.05))
-        .cornerRadius(12)
-        .frame(maxWidth: .infinity)
-    }
-}
-
-struct CategoriaCard: View {
-    let categoria: CategoriaFinanciera
-    @Environment(\.colorScheme) var colorScheme
-    
-    var body: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Image(systemName: categoria.icono)
-                    .foregroundColor(categoria.estado.color)
-                    .font(.title3)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(categoria.nombre)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundColor(colorScheme == .dark ? .white : .primary)
-                        .lineLimit(1)
-                    
-                    Text("\(Int(categoria.porcentajeUsado * 100))% usado")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                Image(systemName: categoria.estado.icono)
-                    .foregroundColor(categoria.estado.color)
-                    .font(.caption)
-            }
-            
-            // Barra de progreso
-            ProgressView(value: min(categoria.porcentajeUsado, 1.0), total: 1.0)
-                .progressViewStyle(LinearProgressViewStyle())
-                .tint(categoria.estado.color)
-                .scaleEffect(y: 1.5)
-            
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Gastado")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    Text("$\(Int(categoria.gastoActual))")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(colorScheme == .dark ? .white : .primary)
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("Presupuesto")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    Text("$\(Int(categoria.presupuestoMensual))")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(colorScheme == .dark ? .white : .primary)
-                }
-            }
-            
-            // Indicadores adicionales
-            if categoria.gastoProyectado > 0 {
-                HStack {
-                    Image(systemName: "clock.fill")
-                        .foregroundColor(.orange)
-                        .font(.caption2)
-                    Text("$\(Int(categoria.gastoProyectado)) pendiente")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-            }
-        }
-        .padding()
-        .background(Color.gray.opacity(0.05))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(categoria.estado.color.opacity(0.3), lineWidth: 1)
-        )
-    }
-}
-
-struct AlertaCard: View {
-    let alerta: AlertaFinanciera
-    @Environment(\.colorScheme) var colorScheme
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(alerta.urgencia.color)
-                .frame(width: 8, height: 8)
-            
-            Text(alerta.mensaje)
-                .font(.subheadline)
-                .foregroundColor(colorScheme == .dark ? .white : .primary)
-                .multilineTextAlignment(.leading)
-            
-            Spacer()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(alerta.urgencia.color.opacity(0.1))
-        .cornerRadius(8)
-    }
-}
-
+// MARK: - Vista para análisis de categorías
 struct CategoriaAnalisisCard: View {
     let categoria: CategoriaPresupuestoAnalisis
     @Environment(\.colorScheme) var colorScheme
@@ -604,6 +471,150 @@ struct CategoriaAnalisisCard: View {
                 .stroke(categoria.estado.color.opacity(0.3), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+    }
+}
+
+// MARK: - Componentes auxiliares
+
+struct FinanceCard: View {
+    let titulo: String
+    let valor: Double
+    let icono: String
+    let color: Color
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Image(systemName: icono)
+                    .foregroundColor(color)
+                    .font(.title3)
+                Spacer()
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(titulo)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Text("$\(Int(valor))")
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundColor(colorScheme == .dark ? .white : .primary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding()
+        .background(Color.gray.opacity(0.05))
+        .cornerRadius(12)
+        .frame(maxWidth: .infinity)
+    }
+}
+
+struct CategoriaCard: View {
+    let categoria: CategoriaFinanciera
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            headerSection
+            proveedoresSection
+            if categoria.proveedoresComunes.count > 5 {
+                proyeccionSection
+            }
+        }
+        .padding()
+        .background(categoria.colorPrimario.opacity(0.1))
+        .cornerRadius(12)
+        .frame(maxWidth: .infinity)
+    }
+    
+    private var headerSection: some View {
+        HStack {
+            Image(systemName: categoria.icono)
+                .foregroundColor(categoria.colorPrimario)
+                .font(.title3)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(categoria.rawValue)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(colorScheme == .dark ? .white : .primary)
+                    .lineLimit(1)
+                
+                Text(categoria.descripcion)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .foregroundColor(.secondary)
+                .font(.caption)
+        }
+    }
+    
+    private var proveedoresSection: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Proveedores")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Text("\(categoria.proveedoresComunes.count)")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(colorScheme == .dark ? .white : .primary)
+            }
+            
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("Configurado")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Text("✓")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(colorScheme == .dark ? .white : .primary)
+            }
+        }
+    }
+    
+    private var proyeccionSection: some View {
+        HStack {
+            Image(systemName: "clock.fill")
+                .foregroundColor(.orange)
+                .font(.caption2)
+            Text("Muchos proveedores disponibles")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Spacer()
+        }
+    }
+}
+
+struct AlertaCard: View {
+    let alerta: AlertaFinanciera
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(alerta.urgencia.color)
+                .frame(width: 8, height: 8)
+            
+            Text(alerta.mensaje)
+                .font(.subheadline)
+                .foregroundColor(colorScheme == .dark ? .white : .primary)
+                .multilineTextAlignment(.leading)
+            
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(alerta.urgencia.color.opacity(0.1))
+        .cornerRadius(8)
     }
 }
 

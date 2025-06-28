@@ -133,15 +133,15 @@ struct ConfiguracionCategoriasView: View {
             // Icono y nombre
             VStack(spacing: 8) {
                 Circle()
-                    .fill(categoria.color.opacity(0.2))
+                    .fill(categoria.colorPrimario.opacity(0.2))
                     .frame(width: 50, height: 50)
                     .overlay(
                         Image(systemName: categoria.icono)
                             .font(.title2)
-                            .foregroundColor(categoria.color)
+                            .foregroundColor(categoria.colorPrimario)
                     )
                 
-                Text(categoria.nombre)
+                Text(categoria.rawValue)
                     .font(.caption.weight(.medium))
                     .foregroundColor(.white)
                     .multilineTextAlignment(.center)
@@ -190,7 +190,7 @@ struct ConfiguracionCategoriasView: View {
                 .fill(Color.white.opacity(0.05))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(categoria.color.opacity(0.3), lineWidth: 1)
+                        .stroke(categoria.colorPrimario.opacity(0.3), lineWidth: 1)
                 )
         )
     }
@@ -515,10 +515,10 @@ struct EditorCategoriaView: View {
     
     private func cargarDatos() {
         if let categoria = categoria {
-            nombre = categoria.nombre
+            nombre = categoria.rawValue
             descripcion = categoria.descripcion
             iconoSeleccionado = categoria.icono
-            colorSeleccionado = categoria.color
+            colorSeleccionado = categoria.colorPrimario
             // Aquí cargaríamos los proveedores personalizados desde UserDefaults o Core Data
         }
     }

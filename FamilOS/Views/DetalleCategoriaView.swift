@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct DetalleCategoriaView: View {
-    let categoria: CategoriaFinanciera
+    let categoria: CategoriaPresupuestoAnalisis
     let presupuestoVM: PresupuestoViewModel
     let cuentasVM: CuentasViewModel
     
@@ -584,7 +584,17 @@ struct RecomendacionCard: View {
 
 #Preview {
     DetalleCategoriaView(
-        categoria: .luz,
+        categoria: CategoriaPresupuestoAnalisis(
+            nombre: "Luz",
+            icono: "lightbulb.fill",
+            presupuestoMensual: 50000,
+            gastoActual: 35000,
+            gastoProyectado: 15000,
+            porcentajeUsado: 0.7,
+            estado: .atencion,
+            cuentasPendientes: 2,
+            cuentasPagadas: 3
+        ),
         presupuestoVM: PresupuestoViewModel(),
         cuentasVM: CuentasViewModel()
     )

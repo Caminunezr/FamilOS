@@ -57,7 +57,13 @@ struct GestorProveedoresView: View {
                 }
             }
             .navigationTitle("")
-            .navigationBarHidden(true)
+            .toolbar {
+                ToolbarItem(placement: .navigation) {
+                    Button("Atrás") {
+                        dismiss()
+                    }
+                }
+            }
         }
         .onAppear {
             // Los datos se cargan automáticamente desde el manager
@@ -80,8 +86,8 @@ struct GestorProveedoresView: View {
     private var backgroundView: some View {
         LinearGradient(
             gradient: Gradient(colors: [
-                categoria.color.opacity(0.8),
-                categoria.color.opacity(0.4),
+                categoria.colorPrimario.opacity(0.8),
+                categoria.colorPrimario.opacity(0.4),
                 Color.black.opacity(0.6)
             ]),
             startPoint: .topLeading,
@@ -124,7 +130,7 @@ struct GestorProveedoresView: View {
                     .shadow(color: .white.opacity(0.3), radius: 10, x: 0, y: 5)
                 
                 VStack(spacing: 8) {
-                    Text("Proveedores de \(categoria.nombre)")
+                    Text("Proveedores de \(categoria.rawValue)")
                         .font(.title.weight(.bold))
                         .foregroundColor(.white)
                         .multilineTextAlignment(.center)
@@ -295,12 +301,12 @@ struct GestorProveedoresView: View {
         HStack(spacing: 16) {
             // Icono
             Circle()
-                .fill(esPersonalizado ? Color.orange.opacity(0.2) : categoria.color.opacity(0.2))
+                .fill(esPersonalizado ? Color.orange.opacity(0.2) : categoria.colorPrimario.opacity(0.2))
                 .frame(width: 40, height: 40)
                 .overlay(
                     Image(systemName: esPersonalizado ? "person.badge.plus" : "building.2")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(esPersonalizado ? .orange : categoria.color)
+                        .foregroundColor(esPersonalizado ? .orange : categoria.colorPrimario)
                 )
             
             // Información

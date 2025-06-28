@@ -508,50 +508,433 @@ struct DeudasListView: View {
 
 struct NuevoAporteView: View {
     @ObservedObject var viewModel: PresupuestoViewModel
-    @State private var usuario: String = ""
-    @State private var monto: Double = 0
-    @State private var comentario: String = ""
-    
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    
+    // Estados del formulario
+    @State private var usuarioSeleccionado: String = ""
+    @State private var monto: Double = 0
+    @State private var montoTexto: String = ""
+    @State private var comentario: String = ""
+    @State private var categoriaDetectada: CategoriaFinanciera? = nil
+    @State private var mostrarNotasCompletas = false
+    
+    // Estados de UI
+    @State private var mostrarSugerencias = false
+    @State private var animacionMonto = false
+    @State private var validacionActiva = false
+    
+    // Datos mockeados para los miembros de la familia
+    private let miembrosFamilia = [
+        ("Papá", "👨🏻", Color.blue),
+        ("Mamá", "👩🏻", Color.pink),
+        ("Hijo", "👦🏻", Color.green),
+        ("Hija", "👧🏻", Color.purple)
+    ]
+    
+    // Sugerencias rápidas de montos
+    private let sugerenciasRapidas = [100, 500, 1000, 1500, 2000, 5000]
     
     var body: some View {
         NavigationStack {
-            Form {
-                Section(header: Text("Detalles del Aporte")) {
-                    TextField("Usuario", text: $usuario)
-                    
-                    TextField("Monto", value: $monto, format: .number)
-                    
-                    TextField("Comentario (opcional)", text: $comentario)
-                        .lineLimit(1...3)
+            GeometryReader { geometry in
+                ScrollView {
+                    VStack(spacing: 25) {
+                        // Header con título y subtítulo
+                        VStack(spacing: 8) {
+                            HStack {
+                                Text("💰")
+                                    .font(.title)
+                                Text("Agregar Aporte")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                            }
+                            
+                            Text("Registra un nuevo ingreso al presupuesto familiar")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(.top, 20)
+                        
+                        // Selector visual de miembros
+                        VStack(alignment: .leading, spacing: 15) {
+                            Text("¿Quién realiza el aporte?")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 15), count: 2), spacing: 15) {
+                                ForEach(miembrosFamilia, id: \.0) { miembro in
+                                    BotonMiembro(
+                                        nombre: miembro.0,
+                                        emoji: miembro.1,
+                                        color: miembro.2,
+                                        isSeleccionado: usuarioSeleccionado == miembro.0
+                                    ) {
+                                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                                            usuarioSeleccionado = miembro.0
+                                            validacionActiva = true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                        
+                        // Input de monto con diseño moderno
+                        VStack(alignment: .leading, spacing: 15) {
+                            Text("Monto del aporte")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            VStack(spacing: 12) {
+                                // Campo de entrada principal
+                                HStack {
+                                    Text("$")
+                                        .font(.title2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.secondary)
+                                    
+                                    TextField("0.00", text: $montoTexto)
+                                        .font(.title2)
+                                        .fontWeight(.medium)
+                                        .keyboardType(.decimalPad)
+                                        .onChange(of: montoTexto) { newValue in
+                                            if let valor = Double(newValue) {
+                                                monto = valor
+                                                withAnimation(.easeInOut(duration: 0.3)) {
+                                                    animacionMonto = valor > 0
+                                                    mostrarSugerencias = false
+                                                }
+                                                detectarCategoria()
+                                            }
+                                        }
+                                        .onTapGesture {
+                                            withAnimation(.easeInOut(duration: 0.3)) {
+                                                mostrarSugerencias = true
+                                            }
+                                        }
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 15)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(colorScheme == .dark ? Color.black.opacity(0.3) : Color.white.opacity(0.8))
+                                        .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(
+                                            animacionMonto ? Color.blue : Color.clear,
+                                            lineWidth: 2
+                                        )
+                                        .animation(.easeInOut(duration: 0.3), value: animacionMonto)
+                                )
+                                
+                                // Sugerencias rápidas
+                                if mostrarSugerencias {
+                                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+                                        ForEach(sugerenciasRapidas, id: \.self) { sugerencia in
+                                            Button {
+                                                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                                                    montoTexto = String(sugerencia)
+                                                    monto = Double(sugerencia)
+                                                    mostrarSugerencias = false
+                                                    animacionMonto = true
+                                                }
+                                                detectarCategoria()
+                                            } label: {
+                                                Text("$\(sugerencia)")
+                                                    .font(.caption)
+                                                    .fontWeight(.medium)
+                                                    .foregroundColor(.blue)
+                                                    .padding(.horizontal, 12)
+                                                    .padding(.vertical, 8)
+                                                    .background(Color.blue.opacity(0.1))
+                                                    .cornerRadius(8)
+                                            }
+                                        }
+                                    }
+                                    .transition(.scale.combined(with: .opacity))
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                        
+                        // Detección automática de categoría
+                        if let categoria = categoriaDetectada {
+                            HStack {
+                                Image(systemName: categoria.icono)
+                                    .foregroundColor(.blue)
+                                Text("Categoría detectada: \(categoria.displayName)")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(10)
+                            .padding(.horizontal)
+                            .transition(.scale.combined(with: .opacity))
+                        }
+                        
+                        // Notas expandibles
+                        VStack(alignment: .leading, spacing: 15) {
+                            HStack {
+                                Text("Notas (opcional)")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                
+                                Spacer()
+                                
+                                Button {
+                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                                        mostrarNotasCompletas.toggle()
+                                    }
+                                } label: {
+                                    Image(systemName: mostrarNotasCompletas ? "chevron.up" : "chevron.down")
+                                        .foregroundColor(.blue)
+                                        .font(.caption)
+                                }
+                            }
+                            
+                            if mostrarNotasCompletas {
+                                TextField(placeholderInteligente, text: $comentario, axis: .vertical)
+                                    .lineLimit(3...6)
+                                    .padding(.horizontal, 15)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(colorScheme == .dark ? Color.black.opacity(0.3) : Color.white.opacity(0.8))
+                                            .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+                                    )
+                                    .transition(.scale.combined(with: .opacity))
+                            }
+                        }
+                        .padding(.horizontal)
+                        
+                        // Preview en tiempo real
+                        if monto > 0 && !usuarioSeleccionado.isEmpty {
+                            VStack(spacing: 12) {
+                                Text("Vista previa")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.secondary)
+                                
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        HStack {
+                                            Text(emojiParaUsuario(usuarioSeleccionado))
+                                            Text(usuarioSeleccionado)
+                                                .fontWeight(.medium)
+                                        }
+                                        
+                                        Text("Aporte: $\(monto, specifier: "%.2f")")
+                                            .font(.title3)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(.green)
+                                        
+                                        if !comentario.isEmpty {
+                                            Text(comentario)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                                .lineLimit(2)
+                                        }
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    VStack(alignment: .trailing, spacing: 4) {
+                                        Text("Nuevo total")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        
+                                        Text("$\(viewModel.totalAportes + monto, specifier: "%.2f")")
+                                            .font(.subheadline)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                                .padding()
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(colorScheme == .dark ? Color.green.opacity(0.1) : Color.green.opacity(0.05))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Color.green.opacity(0.3), lineWidth: 1)
+                                        )
+                                )
+                            }
+                            .padding(.horizontal)
+                            .transition(.scale.combined(with: .opacity))
+                        }
+                        
+                        Spacer(minLength: 100)
+                    }
                 }
             }
-            .navigationTitle("Nuevo Aporte")
+            .background(
+                // Fondo glassmorphism
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        colorScheme == .dark ? Color.black.opacity(0.7) : Color.white.opacity(0.9),
+                        colorScheme == .dark ? Color.blue.opacity(0.1) : Color.blue.opacity(0.05)
+                    ]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+            )
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancelar") {
                         dismiss()
                     }
+                    .foregroundColor(.red)
                 }
                 
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Guardar") {
-                        guard let presupuestoActual = viewModel.presupuestoActual else { return }
-                        
-                        let nuevoAporte = Aporte(
-                            presupuestoId: presupuestoActual.id,
-                            usuario: usuario,
-                            monto: monto,
-                            comentario: comentario
-                        )
-                        
-                        viewModel.agregarAporte(nuevoAporte)
-                        dismiss()
+                        guardarAporte()
                     }
-                    .disabled(usuario.isEmpty || monto <= 0)
+                    .fontWeight(.bold)
+                    .foregroundColor(formularioValido ? .blue : .gray)
+                    .disabled(!formularioValido)
+                    .scaleEffect(validacionActiva && formularioValido ? 1.05 : 1.0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: validacionActiva)
                 }
             }
         }
+        .onAppear {
+            // Auto-seleccionar el primer usuario si solo hay uno
+            if miembrosFamilia.count == 1 {
+                usuarioSeleccionado = miembrosFamilia.first?.0 ?? ""
+            }
+        }
+    }
+    
+    // MARK: - Computed Properties
+    
+    private var formularioValido: Bool {
+        !usuarioSeleccionado.isEmpty && monto > 0
+    }
+    
+    private var placeholderInteligente: String {
+        if monto > 0 {
+            switch monto {
+            case 0...500:
+                return "Ej: Propina, regalo, venta pequeña..."
+            case 501...2000:
+                return "Ej: Bono, trabajo extra, reembolso..."
+            case 2001...10000:
+                return "Ej: Sueldo, comisión, préstamo familiar..."
+            default:
+                return "Ej: Sueldo principal, venta importante, herencia..."
+            }
+        }
+        return "Describe el origen del aporte..."
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func emojiParaUsuario(_ usuario: String) -> String {
+        return miembrosFamilia.first { $0.0 == usuario }?.1 ?? "👤"
+    }
+    
+    private func detectarCategoria() {
+        // Lógica simple de detección basada en el monto
+        withAnimation(.easeInOut(duration: 0.3)) {
+            switch monto {
+            case 0...1000:
+                categoriaDetectada = .varios // Ingresos pequeños
+            case 1001...5000:
+                categoriaDetectada = .servicios // Ingresos medianos
+            case 5001...20000:
+                categoriaDetectada = .vivienda // Sueldo principal
+            default:
+                categoriaDetectada = .varios // Ingresos grandes
+            }
+        }
+    }
+    
+    private func guardarAporte() {
+        guard let presupuestoActual = viewModel.presupuestoActual else { return }
+        
+        let nuevoAporte = Aporte(
+            presupuestoId: presupuestoActual.id,
+            usuario: usuarioSeleccionado,
+            monto: monto,
+            comentario: comentario
+        )
+        
+        // Efecto de retroalimentación táctil (solo en dispositivos compatibles)
+        #if os(iOS)
+        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+        impactFeedback.impactOccurred()
+        #endif
+        
+        viewModel.agregarAporte(nuevoAporte)
+        
+        // Cerrar con animación
+        withAnimation(.easeInOut(duration: 0.3)) {
+            dismiss()
+        }
+    }
+}
+
+// MARK: - Componentes Auxiliares
+
+struct BotonMiembro: View {
+    let nombre: String
+    let emoji: String
+    let color: Color
+    let isSeleccionado: Bool
+    let action: () -> Void
+    
+    @Environment(\.colorScheme) private var colorScheme
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Text(emoji)
+                    .font(.title)
+                    .scaleEffect(isSeleccionado ? 1.2 : 1.0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSeleccionado)
+                
+                Text(nombre)
+                    .font(.caption)
+                    .fontWeight(isSeleccionado ? .bold : .medium)
+                    .foregroundColor(isSeleccionado ? .white : .primary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 15)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(
+                        isSeleccionado 
+                        ? AnyShapeStyle(color.gradient)
+                        : AnyShapeStyle(colorScheme == .dark ? Color.black.opacity(0.3) : Color.white.opacity(0.8))
+                    )
+                    .shadow(
+                        color: isSeleccionado ? color.opacity(0.3) : Color.black.opacity(0.1),
+                        radius: isSeleccionado ? 8 : 5,
+                        x: 0,
+                        y: isSeleccionado ? 4 : 2
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(
+                        isSeleccionado ? color : Color.clear,
+                        lineWidth: 2
+                    )
+            )
+            .scaleEffect(isSeleccionado ? 1.05 : 1.0)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: isSeleccionado)
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 

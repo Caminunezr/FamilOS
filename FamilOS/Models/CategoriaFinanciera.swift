@@ -3,12 +3,22 @@ import SwiftUI
 
 // MARK: - Categoría Financiera
 enum CategoriaFinanciera: String, CaseIterable, Identifiable {
+    // Gastos
     case luz = "Luz"
     case agua = "Agua"
     case internet = "Internet"
     case gas = "Gas"
     case mascotas = "Mascotas"
     case hogar = "Hogar"
+    
+    // Ingresos
+    case sueldo = "Sueldo"
+    case bonos = "Bonos"
+    case ventas = "Ventas"
+    case servicios = "Servicios"
+    case inversiones = "Inversiones"
+    case varios = "Varios"
+    case vivienda = "Vivienda"
     
     var id: String { self.rawValue }
     
@@ -26,6 +36,20 @@ enum CategoriaFinanciera: String, CaseIterable, Identifiable {
             return ["Comida Gato", "Comida Perro", "Veterinario", "Accesorios", "Medicamentos", "Peluquería"]
         case .hogar:
             return ["Feria", "Útiles de Aseo", "Arreglos Casa", "Electrodomésticos", "Ferretería", "Supermercado"]
+        case .sueldo:
+            return ["Sueldo Principal", "Sueldo Secundario", "Trabajo Temporal", "Freelance"]
+        case .bonos:
+            return ["Bono Mensual", "Comisiones", "Aguinaldo", "Gratificación", "Bono Extra"]
+        case .ventas:
+            return ["Venta Online", "Venta Ocasional", "Negocio Personal", "Marketplace"]
+        case .servicios:
+            return ["Consultoría", "Servicios Profesionales", "Trabajo Extra", "Proyecto"]
+        case .inversiones:
+            return ["Dividendos", "Intereses", "Criptomonedas", "Fondos", "Acciones"]
+        case .varios:
+            return ["Regalo", "Reembolso", "Devolución", "Préstamo", "Otros"]
+        case .vivienda:
+            return ["Arriendo", "Venta Propiedad", "Renta", "Alquiler"]
         }
     }
     
@@ -37,6 +61,13 @@ enum CategoriaFinanciera: String, CaseIterable, Identifiable {
         case .gas: return "flame.fill"
         case .mascotas: return "pawprint.fill"
         case .hogar: return "house.fill"
+        case .sueldo: return "banknote.fill"
+        case .bonos: return "star.fill"
+        case .ventas: return "cart.fill"
+        case .servicios: return "wrench.and.screwdriver.fill"
+        case .inversiones: return "chart.line.uptrend.xyaxis"
+        case .varios: return "ellipsis.circle.fill"
+        case .vivienda: return "building.2.fill"
         }
     }
     
@@ -48,6 +79,13 @@ enum CategoriaFinanciera: String, CaseIterable, Identifiable {
         case .gas: return .orange
         case .mascotas: return .brown
         case .hogar: return .green
+        case .sueldo: return .blue
+        case .bonos: return .yellow
+        case .ventas: return .orange
+        case .servicios: return .purple
+        case .inversiones: return .green
+        case .varios: return .gray
+        case .vivienda: return .brown
         }
     }
     
@@ -59,7 +97,18 @@ enum CategoriaFinanciera: String, CaseIterable, Identifiable {
         case .gas: return "Gas licuado y natural"
         case .mascotas: return "Gastos de mascotas"
         case .hogar: return "Gastos varios del hogar"
+        case .sueldo: return "Ingresos por trabajo"
+        case .bonos: return "Bonificaciones y extras"
+        case .ventas: return "Ingresos por ventas"
+        case .servicios: return "Servicios profesionales"
+        case .inversiones: return "Retornos de inversión"
+        case .varios: return "Ingresos varios"
+        case .vivienda: return "Ingresos por propiedades"
         }
+    }
+    
+    var displayName: String {
+        return rawValue
     }
     
     var ejemploProveedor: String {
