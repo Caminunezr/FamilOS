@@ -96,6 +96,7 @@ struct PresupuestoView: View {
         }
         .sheet(isPresented: $mostrarFormularioAporte) {
             NuevoAporteView(viewModel: viewModel)
+                .frame(width: 600, height: 750)
         }
         .sheet(isPresented: $mostrarFormularioDeuda) {
             NuevaDeudaView(viewModel: viewModel)
@@ -536,32 +537,37 @@ struct NuevoAporteView: View {
     private let sugerenciasRapidas = [100, 500, 1000, 1500, 2000, 5000]
     
     var body: some View {
-        NavigationStack {
-            GeometryReader { geometry in
-                ScrollView {
-                    VStack(spacing: 25) {
-                        headerSection
-                        selectorMiembrosSection
-                        inputMontoSection
-                        categoriaDetectadaSection
-                        notasSection
-                        previewSection
-                        Spacer(minLength: 100)
-                    }
-                }
+        ScrollView {
+            VStack(spacing: 25) {
+                headerSection
+                selectorMiembrosSection
+                inputMontoSection
+                categoriaDetectadaSection
+                notasSection
+                previewSection
             }
-            .background(backgroundGradient)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") {
-                        dismiss()
-                    }
-                    .foregroundColor(.red)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 20)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.1), radius: 20, x: 0, y: 10)
+        )
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancelar") {
+                    dismiss()
                 }
-                
-                ToolbarItem(placement: .confirmationAction) {
-                    saveButton
-                }
+                .foregroundColor(.red)
+            }
+            
+            ToolbarItem(placement: .confirmationAction) {
+                saveButton
             }
         }
         .onAppear {
