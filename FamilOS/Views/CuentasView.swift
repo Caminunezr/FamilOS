@@ -2,7 +2,7 @@ import SwiftUI
 import Combine
 
 struct CuentasView: View {
-    @StateObject var viewModel = CuentasViewModel()
+    @EnvironmentObject var viewModel: CuentasViewModel
     @State private var mostrarFormularioNuevaCuenta = false
     @State private var cuentaSeleccionada: Cuenta? = nil
     @State private var mostrarFiltrosAvanzados = false
@@ -20,9 +20,6 @@ struct CuentasView: View {
         }
         .sheet(isPresented: $mostrarFormularioNuevaCuenta) {
             NuevaCuentaView(viewModel: viewModel, mostrarFormulario: $mostrarFormularioNuevaCuenta)
-        }
-        .onAppear {
-            viewModel.cargarDatosEjemplo()
         }
     }
     
@@ -2487,35 +2484,22 @@ struct NuevaCuentaView: View {
     @Environment(\.dismiss) var dismiss
     
     @State private var monto: String = ""
-    @State private var proveedor: String = ""
     @State private var fechaVencimiento: Date = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
     @State private var fechaEmision: Date = Date()
     @State private var usarFechaEmision: Bool = false
-    @State private var categoria: String = "Luz"
-    @State private var categoriaPersonalizada: String = ""
+    @State private var categoriaSeleccionada: CategoriaFinanciera = .luz
+    @State private var proveedorSeleccionado: String = ""
     @State private var descripcion: String = ""
     @State private var nombre: String = ""
     @State private var mostrandoError: Bool = false
     @State private var mensajeError: String = ""
     @State private var creandoCuenta: Bool = false
     
-    private var categoriasDisponibles: [String] {
-        return Cuenta.CategoriasCuentas.allCases.map { $0.rawValue }
-    }
-    
-    private var categoriaFinal: String {
-        if categoria == "Otros" && !categoriaPersonalizada.isEmpty {
-            return categoriaPersonalizada
-        }
-        return categoria
-    }
-    
     private var esFormularioValido: Bool {
-        !proveedor.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !proveedorSeleccionado.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !monto.isEmpty &&
         Double(monto) != nil &&
-        Double(monto)! > 0 &&
-        !categoriaFinal.isEmpty
+        Double(monto)! > 0
     }
     
     var body: some View {
@@ -2618,21 +2602,17 @@ struct NuevaCuentaView: View {
             // Información básica
             seccionFormulario(titulo: "Información Básica", icono: "info.circle") {
                 VStack(spacing: 16) {
-                    campoTexto("Proveedor", texto: $proveedor, placeholder: "Ej: CFE, Totalplay, etc.")
                     campoTexto("Nombre (opcional)", texto: $nombre, placeholder: "Nombre descriptivo")
                     campoMonto("Monto", valor: $monto)
                 }
             }
             
-            // Categoría
-            seccionFormulario(titulo: "Categoría", icono: "tag") {
-                VStack(spacing: 12) {
-                    selectorCategoria
-                    
-                    if categoria == "Otros" {
-                        campoTexto("Especificar categoría", texto: $categoriaPersonalizada, placeholder: "Ingresa la categoría")
-                    }
-                }
+            // Categoría y Proveedor
+            seccionFormulario(titulo: "Categoría y Proveedor", icono: "tag") {
+                SelectorCategoriaProveedor(
+                    categoriaSeleccionada: $categoriaSeleccionada,
+                    proveedorSeleccionado: $proveedorSeleccionado
+                )
             }
             
             // Fechas
@@ -2761,48 +2741,7 @@ struct NuevaCuentaView: View {
     }
     
     private var selectorCategoria: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Seleccionar categoría")
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(.white.opacity(0.9))
-            
-            Menu {
-                ForEach(categoriasDisponibles, id: \.self) { cat in
-                    Button(cat) {
-                        categoria = cat
-                        if cat != "Otros" {
-                            categoriaPersonalizada = ""
-                        }
-                    }
-                }
-            } label: {
-                HStack {
-                    if let categoriaEnum = Cuenta.CategoriasCuentas(rawValue: categoria) {
-                        Image(systemName: categoriaEnum.icono)
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                    
-                    Text(categoria)
-                        .foregroundColor(.white)
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.down")
-                        .foregroundColor(.white.opacity(0.6))
-                        .font(.caption)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.1))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                        )
-                )
-            }
-        }
+        EmptyView()
     }
     
     private func selectorFecha(_ titulo: String, fecha: Binding<Date>) -> some View {
@@ -2837,15 +2776,9 @@ struct NuevaCuentaView: View {
             return
         }
         
-        let proveedorLimpio = proveedor.trimmingCharacters(in: .whitespacesAndNewlines)
+        let proveedorLimpio = proveedorSeleccionado.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !proveedorLimpio.isEmpty else {
             mostrarError("El proveedor es obligatorio")
-            creandoCuenta = false
-            return
-        }
-        
-        guard !categoriaFinal.isEmpty else {
-            mostrarError("La categoría es obligatoria")
             creandoCuenta = false
             return
         }
@@ -2854,7 +2787,7 @@ struct NuevaCuentaView: View {
             monto: montoDouble,
             proveedor: proveedorLimpio,
             fechaVencimiento: fechaVencimiento,
-            categoria: categoriaFinal,
+            categoria: categoriaSeleccionada.rawValue,
             creador: "Usuario",
             fechaEmision: usarFechaEmision ? fechaEmision : nil,
             descripcion: descripcion.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -2875,12 +2808,11 @@ struct NuevaCuentaView: View {
     
     private func limpiarFormulario() {
         monto = ""
-        proveedor = ""
         fechaVencimiento = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
         fechaEmision = Date()
         usarFechaEmision = false
-        categoria = "Luz"
-        categoriaPersonalizada = ""
+        categoriaSeleccionada = .luz
+        proveedorSeleccionado = ""
         descripcion = ""
         nombre = ""
         creandoCuenta = false

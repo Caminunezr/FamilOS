@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 struct Cuenta: Identifiable, Codable {
     var id: UUID = UUID()
@@ -116,5 +117,28 @@ struct Cuenta: Identifiable, Codable {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM yyyy"
         return formatter.string(from: fechaVencimiento)
+    }
+}
+
+// MARK: - Extensiones para categorías
+extension Cuenta {
+    var categoriaFinanciera: CategoriaFinanciera? {
+        return CategoriaFinanciera.allCases.first { $0.rawValue == categoria }
+    }
+    
+    mutating func setCategoriaFinanciera(_ nuevaCategoria: CategoriaFinanciera) {
+        self.categoria = nuevaCategoria.rawValue
+    }
+    
+    var iconoCategoria: String {
+        return categoriaFinanciera?.icono ?? "questionmark.circle.fill"
+    }
+    
+    var colorCategoria: Color {
+        return categoriaFinanciera?.colorPrimario ?? .gray
+    }
+    
+    var iconoProveedor: String {
+        return proveedor.iconoProveedor
     }
 }

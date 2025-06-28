@@ -2,7 +2,7 @@ import SwiftUI
 import Charts
 
 struct PresupuestoView: View {
-    @StateObject private var viewModel = PresupuestoViewModel()
+    @EnvironmentObject var viewModel: PresupuestoViewModel
     @State private var mostrarFormularioAporte = false
     @State private var mostrarFormularioDeuda = false
     @State private var mostrarAlertaTransferencia = false
@@ -99,9 +99,6 @@ struct PresupuestoView: View {
         }
         .sheet(isPresented: $mostrarFormularioDeuda) {
             NuevaDeudaView(viewModel: viewModel)
-        }
-        .onAppear {
-            viewModel.cargarDatosEjemplo()
         }
     }
 }
@@ -560,7 +557,8 @@ struct NuevoAporteView: View {
 
 struct NuevaDeudaView: View {
     @ObservedObject var viewModel: PresupuestoViewModel
-    @State private var categoria: String = ""
+    @State private var categoriaSeleccionada: CategoriaFinanciera = .luz
+    @State private var proveedorSeleccionado: String = ""
     @State private var montoTotal: Double = 0
     @State private var cuotasTotales: Int = 1
     @State private var tasaInteres: Double = 0
@@ -571,9 +569,14 @@ struct NuevaDeudaView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section(header: Text("Categoría y Proveedor")) {
+                    SelectorCategoriaProveedor(
+                        categoriaSeleccionada: $categoriaSeleccionada,
+                        proveedorSeleccionado: $proveedorSeleccionado
+                    )
+                }
+                
                 Section(header: Text("Detalles del Gasto/Deuda")) {
-                    TextField("Categoría", text: $categoria)
-                    
                     TextField("Monto Total", value: $montoTotal, format: .number)
                     
                     Stepper("Cuotas: \(cuotasTotales)", value: $cuotasTotales, in: 1...60)
@@ -614,7 +617,7 @@ struct NuevaDeudaView: View {
                         
                         let nuevaDeuda = DeudaPresupuesto(
                             presupuestoId: presupuestoActual.id,
-                            categoria: categoria,
+                            categoria: categoriaSeleccionada.rawValue,
                             montoTotal: montoTotal,
                             cuotasTotales: cuotasTotales,
                             tasaInteres: tasaInteres,
@@ -625,7 +628,7 @@ struct NuevaDeudaView: View {
                         viewModel.agregarDeuda(nuevaDeuda)
                         dismiss()
                     }
-                    .disabled(categoria.isEmpty || montoTotal <= 0)
+                    .disabled(proveedorSeleccionado.isEmpty || montoTotal <= 0)
                 }
             }
         }

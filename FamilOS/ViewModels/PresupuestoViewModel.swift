@@ -3,7 +3,7 @@ import SwiftUI
 import Combine
 
 // MARK: - Estructuras para el cruce de datos
-struct CategoriaFinanciera: Identifiable {
+struct CategoriaPresupuestoAnalisis: Identifiable {
     let id = UUID()
     let nombre: String
     let icono: String
@@ -72,7 +72,7 @@ struct ResumenFinancieroIntegrado {
     let gastoProyectado: Double
     let disponible: Double
     let porcentajeUsado: Double
-    let categorias: [CategoriaFinanciera]
+    let categorias: [CategoriaPresupuestoAnalisis]
     let alertas: [AlertaFinanciera]
     
     var excedePresupuesto: Bool {
@@ -90,29 +90,30 @@ struct AlertaFinanciera: Identifiable {
     let mensaje: String
     let categoria: String?
     let urgencia: NivelUrgencia
+}
+
+enum TipoAlerta {
+    case presupuestoExcedido
+    case cercaDelLimite
+    case proyeccionExcede
+    case sinPresupuesto
+    case vencimientoProximo
+}
+
+enum NivelUrgencia {
+    case bajo, medio, alto, critico
     
-    enum TipoAlerta {
-        case presupuestoExcedido
-        case cercaDelLimite
-        case proyeccionExcede
-        case sinPresupuesto
-        case vencimientoProximo
-    }
-    
-    enum NivelUrgencia {
-        case bajo, medio, alto, critico
-        
-        var color: Color {
-            switch self {
-            case .bajo: return .blue
-            case .medio: return .yellow
-            case .alto: return .orange
-            case .critico: return .red
-            }
+    var color: Color {
+        switch self {
+        case .bajo: return .blue
+        case .medio: return .yellow
+        case .alto: return .orange
+        case .critico: return .red
         }
     }
 }
 
+// MARK: - PresupuestoViewModel
 class PresupuestoViewModel: ObservableObject {
     @Published var presupuestos: [PresupuestoMensual] = []
     @Published var aportes: [Aporte] = []
@@ -131,17 +132,14 @@ class PresupuestoViewModel: ObservableObject {
     }
     
     private func cargarPresupuestosPorCategoriaEjemplo() {
+        // Usar las nuevas categorías predefinidas
         presupuestosPorCategoria = [
-            "Luz": 1200.0,
-            "Agua": 400.0,
-            "Gas": 500.0,
-            "Internet": 600.0,
-            "Arriendo": 8500.0,
-            "Alimentación": 3000.0,
-            "Transporte": 1500.0,
-            "Salud": 800.0,
-            "Entretenimiento": 1000.0,
-            "Otros": 500.0
+            CategoriaFinanciera.luz.rawValue: 1200.0,
+            CategoriaFinanciera.agua.rawValue: 400.0,
+            CategoriaFinanciera.gas.rawValue: 500.0,
+            CategoriaFinanciera.internet.rawValue: 600.0,
+            CategoriaFinanciera.mascotas.rawValue: 300.0,
+            CategoriaFinanciera.hogar.rawValue: 2000.0
         ]
     }
 
@@ -319,5 +317,233 @@ class PresupuestoViewModel: ObservableObject {
         }
         
         return datos
+    }
+    
+    // MARK: - Análisis integrado de presupuesto vs cuentas
+    func analisisPresupuestoVsCuentas() -> [CategoriaPresupuestoAnalisis] {
+        guard let cuentasVM = cuentasViewModel else { return [] }
+        
+        let calendario = Calendar.current
+        let cuentasDelMes = cuentasVM.cuentas.filter { cuenta in
+            calendario.isDate(cuenta.fechaVencimiento, equalTo: mesSeleccionado, toGranularity: .month)
+        }
+        
+        return presupuestosPorCategoria.map { (categoria, presupuesto) in
+            let cuentasCategoria = cuentasDelMes.filter { $0.categoria == categoria }
+            
+            // Calcular gastos reales (cuentas pagadas)
+            let gastoActual = cuentasCategoria
+                .filter { $0.estado == .pagada }
+                .reduce(0) { $0 + $1.monto }
+            
+            // Calcular gastos proyectados (pendientes + vencidas)
+            let gastoProyectado = cuentasCategoria
+                .filter { $0.estado != .pagada }
+                .reduce(0) { $0 + $1.monto }
+            
+            let porcentajeUsado = presupuesto > 0 ? gastoActual / presupuesto : 0
+            let estado = calcularEstadoPresupuesto(porcentajeUsado, gastoProyectado: gastoProyectado, presupuesto: presupuesto)
+            
+            let cuentasPendientes = cuentasCategoria.filter { $0.estado != .pagada }.count
+            let cuentasPagadas = cuentasCategoria.filter { $0.estado == .pagada }.count
+            
+            // Obtener icono de la categoría
+            let icono = obtenerIconoCategoria(categoria)
+            
+            return CategoriaPresupuestoAnalisis(
+                nombre: categoria,
+                icono: icono,
+                presupuestoMensual: presupuesto,
+                gastoActual: gastoActual,
+                gastoProyectado: gastoProyectado,
+                porcentajeUsado: porcentajeUsado,
+                estado: estado,
+                cuentasPendientes: cuentasPendientes,
+                cuentasPagadas: cuentasPagadas
+            )
+        }.sorted { $0.porcentajeUsado > $1.porcentajeUsado }
+    }
+    
+    func resumenFinancieroIntegrado() -> ResumenFinancieroIntegrado {
+        let categorias = analisisPresupuestoVsCuentas()
+        
+        let presupuestoTotal = presupuestosPorCategoria.values.reduce(0, +)
+        let gastoActual = categorias.reduce(0) { $0 + $1.gastoActual }
+        let gastoProyectado = categorias.reduce(0) { $0 + $1.gastoProyectado }
+        let disponible = presupuestoTotal - gastoActual
+        let porcentajeUsado = presupuestoTotal > 0 ? gastoActual / presupuestoTotal : 0
+        
+        let alertas = generarAlertas(categorias: categorias)
+        
+        return ResumenFinancieroIntegrado(
+            presupuestoTotal: presupuestoTotal,
+            gastoActual: gastoActual,
+            gastoProyectado: gastoProyectado,
+            disponible: disponible,
+            porcentajeUsado: porcentajeUsado,
+            categorias: categorias,
+            alertas: alertas
+        )
+    }
+    
+    private func calcularEstadoPresupuesto(_ porcentajeUsado: Double, gastoProyectado: Double, presupuesto: Double) -> EstadoPresupuesto {
+        if presupuesto == 0 {
+            return .sinPresupuesto
+        }
+        
+        let proyeccionTotal = porcentajeUsado + (gastoProyectado / presupuesto)
+        
+        if porcentajeUsado > 1.0 {
+            return .excedido
+        } else if proyeccionTotal > 1.0 || porcentajeUsado > 0.9 {
+            return .cerca
+        } else if porcentajeUsado > 0.7 {
+            return .atencion
+        } else {
+            return .enRango
+        }
+    }
+    
+    private func obtenerIconoCategoria(_ categoria: String) -> String {
+        // Usar el nuevo enum de categorías
+        if let categoriaEnum = CategoriaFinanciera.allCases.first(where: { $0.rawValue == categoria }) {
+            return categoriaEnum.icono
+        }
+        
+        // Fallback para categorías que no estén en el nuevo enum
+        switch categoria {
+        case "Arriendo": return "house.fill"
+        case "Alimentación": return "fork.knife"
+        case "Transporte": return "car.fill"
+        case "Salud": return "cross.case.fill"
+        case "Entretenimiento": return "tv.fill"
+        default: return "questionmark.circle.fill"
+        }
+    }
+    
+    private func generarAlertas(categorias: [CategoriaPresupuestoAnalisis]) -> [AlertaFinanciera] {
+        var alertas: [AlertaFinanciera] = []
+        
+        for categoria in categorias {
+            switch categoria.estado {
+            case .excedido:
+                alertas.append(AlertaFinanciera(
+                    tipo: .presupuestoExcedido,
+                    mensaje: "\(categoria.nombre): Presupuesto excedido en $\(String(format: "%.0f", -categoria.diferencia))",
+                    categoria: categoria.nombre,
+                    urgencia: .critico
+                ))
+                
+            case .cerca:
+                if categoria.excedeProyeccion {
+                    alertas.append(AlertaFinanciera(
+                        tipo: .proyeccionExcede,
+                        mensaje: "\(categoria.nombre): Proyección excederá presupuesto en $\(String(format: "%.0f", categoria.proyeccionFinal - categoria.presupuestoMensual))",
+                        categoria: categoria.nombre,
+                        urgencia: .alto
+                    ))
+                } else {
+                    alertas.append(AlertaFinanciera(
+                        tipo: .cercaDelLimite,
+                        mensaje: "\(categoria.nombre): Cerca del límite (\(String(format: "%.0f", categoria.porcentajeUsado * 100))%)",
+                        categoria: categoria.nombre,
+                        urgencia: .medio
+                    ))
+                }
+                
+            case .atencion:
+                alertas.append(AlertaFinanciera(
+                    tipo: .cercaDelLimite,
+                    mensaje: "\(categoria.nombre): Atención - \(String(format: "%.0f", categoria.porcentajeUsado * 100))% usado",
+                    categoria: categoria.nombre,
+                    urgencia: .medio
+                ))
+                
+            case .sinPresupuesto:
+                if categoria.gastoActual > 0 {
+                    alertas.append(AlertaFinanciera(
+                        tipo: .sinPresupuesto,
+                        mensaje: "\(categoria.nombre): Sin presupuesto definido ($\(String(format: "%.0f", categoria.gastoActual)) gastado)",
+                        categoria: categoria.nombre,
+                        urgencia: .bajo
+                    ))
+                }
+                
+            case .enRango:
+                break // No genera alertas
+            }
+        }
+        
+        // Agregar alertas de vencimientos próximos si hay acceso a cuentasViewModel
+        if let cuentasVM = cuentasViewModel {
+            let cuentasProximasVencer = cuentasVM.cuentasProximasVencer
+            if !cuentasProximasVencer.isEmpty {
+                alertas.append(AlertaFinanciera(
+                    tipo: .vencimientoProximo,
+                    mensaje: "\(cuentasProximasVencer.count) cuenta(s) vencen pronto",
+                    categoria: nil,
+                    urgencia: .alto
+                ))
+            }
+        }
+        
+        return alertas.sorted { $0.urgencia.hashValue > $1.urgencia.hashValue }
+    }
+    
+    // MARK: - Métodos de gestión de presupuestos por categoría
+    func actualizarPresupuestoCategoria(_ categoria: String, monto: Double) {
+        presupuestosPorCategoria[categoria] = monto
+        objectWillChange.send()
+    }
+    
+    func obtenerPresupuestoCategoria(_ categoria: String) -> Double {
+        return presupuestosPorCategoria[categoria] ?? 0.0
+    }
+    
+    func categoriasConGastosSinPresupuesto() -> [String] {
+        guard let cuentasVM = cuentasViewModel else { return [] }
+        
+        let calendario = Calendar.current
+        let cuentasDelMes = cuentasVM.cuentas.filter { cuenta in
+            calendario.isDate(cuenta.fechaVencimiento, equalTo: mesSeleccionado, toGranularity: .month)
+        }
+        
+        let categoriasConGastos = Set(cuentasDelMes.map { $0.categoria })
+        let categoriasConPresupuesto = Set(presupuestosPorCategoria.keys)
+        
+        return Array(categoriasConGastos.subtracting(categoriasConPresupuesto))
+    }
+    
+    func sugerirPresupuestoParaCategoria(_ categoria: String) -> Double {
+        guard let cuentasVM = cuentasViewModel else { return 0 }
+        
+        // Calcular promedio de gastos de los últimos 3 meses para esta categoría
+        let calendario = Calendar.current
+        var totalGastos: Double = 0
+        var mesesConGastos = 0
+        
+        for i in 0..<3 {
+            if let fecha = calendario.date(byAdding: .month, value: -i, to: Date()) {
+                let gastosDelMes = cuentasVM.cuentas
+                    .filter { cuenta in
+                        cuenta.categoria == categoria &&
+                        calendario.isDate(cuenta.fechaVencimiento, equalTo: fecha, toGranularity: .month)
+                    }
+                    .reduce(0) { $0 + $1.monto }
+                
+                if gastosDelMes > 0 {
+                    totalGastos += gastosDelMes
+                    mesesConGastos += 1
+                }
+            }
+        }
+        
+        if mesesConGastos > 0 {
+            let promedio = totalGastos / Double(mesesConGastos)
+            // Agregar un 10% de margen
+            return promedio * 1.1
+        }
+        
+        return 0
     }
 }

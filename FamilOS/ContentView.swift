@@ -19,33 +19,53 @@ struct ContentView: View {
 
 struct MainTabView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
+    @StateObject private var cuentasViewModel = CuentasViewModel()
+    @StateObject private var presupuestoViewModel = PresupuestoViewModel()
     @State private var seleccionTab = 0
     
     var body: some View {
         TabView(selection: $seleccionTab) {
-            CuentasView()
+            DashboardIntegradoView()
+                .environmentObject(cuentasViewModel)
+                .environmentObject(presupuestoViewModel)
                 .tabItem {
-                    Label("Cuentas", systemImage: "doc.text.fill")
+                    Label("Dashboard", systemImage: "chart.line.uptrend.xyaxis")
                 }
                 .tag(0)
             
+            CuentasView()
+                .environmentObject(cuentasViewModel)
+                .tabItem {
+                    Label("Cuentas", systemImage: "doc.text.fill")
+                }
+                .tag(1)
+            
             PresupuestoView()
+                .environmentObject(presupuestoViewModel)
                 .tabItem {
                     Label("Presupuesto", systemImage: "chart.pie.fill")
                 }
-                .tag(1)
+                .tag(2)
             
             HistorialView()
                 .tabItem {
                     Label("Historial", systemImage: "clock.fill")
                 }
-                .tag(2)
+                .tag(3)
             
             ConfiguracionView()
                 .tabItem {
                     Label("Configuración", systemImage: "gearshape.fill")
                 }
-                .tag(3)
+                .tag(4)
+        }
+        .onAppear {
+            // Configurar la integración entre ViewModels
+            presupuestoViewModel.configurarIntegracionCuentas(cuentasViewModel)
+            
+            // Cargar datos de ejemplo
+            cuentasViewModel.cargarDatosEjemplo()
+            presupuestoViewModel.cargarDatosEjemplo()
         }
         .toolbar {
             ToolbarItem(placement: .automatic) {

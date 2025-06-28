@@ -73,72 +73,84 @@ class CuentasViewModel: ObservableObject {
         
         cuentas = []
         
-        // Generar cuentas para los últimos 3 meses
+        // Generar cuentas para los últimos 3 meses usando las nuevas categorías
         for mesOffset in -2...1 {
             guard let mesBase = calendario.date(byAdding: .month, value: mesOffset, to: ahora) else { continue }
             
-            // CFE (Luz)
-            let cfe = Cuenta(
+            // Enel (Luz)
+            let luz = Cuenta(
                 monto: Double.random(in: 800...1200),
-                proveedor: "CFE",
+                proveedor: "Enel",
                 fechaVencimiento: calendario.date(byAdding: .day, value: 15, to: mesBase)!,
-                categoria: Cuenta.CategoriasCuentas.luz.rawValue,
+                categoria: CategoriaFinanciera.luz.rawValue,
                 creador: "Usuario",
                 fechaEmision: calendario.date(byAdding: .day, value: 1, to: mesBase),
                 descripcion: "Consumo eléctrico del hogar",
                 fechaPago: mesOffset < 0 ? calendario.date(byAdding: .day, value: 12, to: mesBase) : nil
             )
-            cuentas.append(cfe)
+            cuentas.append(luz)
             
-            // Totalplay (Internet)
+            // Mundo (Internet)
             let internet = Cuenta(
                 monto: 599.0,
-                proveedor: "Totalplay",
+                proveedor: "Mundo",
                 fechaVencimiento: calendario.date(byAdding: .day, value: 5, to: mesBase)!,
-                categoria: Cuenta.CategoriasCuentas.internet.rawValue,
+                categoria: CategoriaFinanciera.internet.rawValue,
                 creador: "Usuario",
                 descripcion: "Internet fibra óptica 200MB",
                 fechaPago: mesOffset < 0 ? calendario.date(byAdding: .day, value: 3, to: mesBase) : nil
             )
             cuentas.append(internet)
             
-            // Conagua (Agua)
+            // Aguas Andinas (Agua)
             let agua = Cuenta(
                 monto: Double.random(in: 200...400),
-                proveedor: "Conagua",
+                proveedor: "Aguas Andinas",
                 fechaVencimiento: calendario.date(byAdding: .day, value: 20, to: mesBase)!,
-                categoria: Cuenta.CategoriasCuentas.agua.rawValue,
+                categoria: CategoriaFinanciera.agua.rawValue,
                 creador: "Usuario",
                 descripcion: "Servicio de agua potable",
                 fechaPago: mesOffset < 0 ? calendario.date(byAdding: .day, value: 18, to: mesBase) : nil
             )
             cuentas.append(agua)
             
-            // Naturgy (Gas)
+            // Lipigas (Gas)
             let gas = Cuenta(
                 monto: Double.random(in: 300...600),
-                proveedor: "Naturgy",
+                proveedor: "Lipigas",
                 fechaVencimiento: calendario.date(byAdding: .day, value: 10, to: mesBase)!,
-                categoria: Cuenta.CategoriasCuentas.gas.rawValue,
+                categoria: CategoriaFinanciera.gas.rawValue,
                 creador: "Usuario",
-                descripcion: "Gas natural",
+                descripcion: "Gas licuado",
                 fechaPago: mesOffset < 0 ? calendario.date(byAdding: .day, value: 8, to: mesBase) : nil
             )
             cuentas.append(gas)
             
-            // Arriendo (solo si es mes actual o anterior)
+            // Veterinario (Mascotas)
             if mesOffset >= -1 {
-                let arriendo = Cuenta(
-                    monto: 8500.0,
-                    proveedor: "Propietario",
-                    fechaVencimiento: calendario.date(byAdding: .day, value: 1, to: mesBase)!,
-                    categoria: Cuenta.CategoriasCuentas.arriendo.rawValue,
+                let mascotas = Cuenta(
+                    monto: Double.random(in: 150...350),
+                    proveedor: "Veterinario",
+                    fechaVencimiento: calendario.date(byAdding: .day, value: 25, to: mesBase)!,
+                    categoria: CategoriaFinanciera.mascotas.rawValue,
                     creador: "Usuario",
-                    descripcion: "Renta mensual del departamento",
-                    fechaPago: mesOffset < 0 ? calendario.date(byAdding: .day, value: 1, to: mesBase) : nil
+                    descripcion: "Control veterinario y comida",
+                    fechaPago: mesOffset < 0 ? calendario.date(byAdding: .day, value: 20, to: mesBase) : nil
                 )
-                cuentas.append(arriendo)
+                cuentas.append(mascotas)
             }
+            
+            // Gastos del hogar
+            let hogar = Cuenta(
+                monto: Double.random(in: 800...1500),
+                proveedor: "Feria",
+                fechaVencimiento: calendario.date(byAdding: .day, value: 30, to: mesBase)!,
+                categoria: CategoriaFinanciera.hogar.rawValue,
+                creador: "Usuario",
+                descripcion: "Compras del hogar y feria",
+                fechaPago: mesOffset < 0 ? calendario.date(byAdding: .day, value: 25, to: mesBase) : nil
+            )
+            cuentas.append(hogar)
         }
     }
     
