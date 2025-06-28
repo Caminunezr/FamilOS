@@ -540,270 +540,27 @@ struct NuevoAporteView: View {
             GeometryReader { geometry in
                 ScrollView {
                     VStack(spacing: 25) {
-                        // Header con título y subtítulo
-                        VStack(spacing: 8) {
-                            HStack {
-                                Text("💰")
-                                    .font(.title)
-                                Text("Agregar Aporte")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                            }
-                            
-                            Text("Registra un nuevo ingreso al presupuesto familiar")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
-                        }
-                        .padding(.top, 20)
-                        
-                        // Selector visual de miembros
-                        VStack(alignment: .leading, spacing: 15) {
-                            Text("¿Quién realiza el aporte?")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                            
-                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 15), count: 2), spacing: 15) {
-                                ForEach(miembrosFamilia, id: \.0) { miembro in
-                                    BotonMiembro(
-                                        nombre: miembro.0,
-                                        emoji: miembro.1,
-                                        color: miembro.2,
-                                        isSeleccionado: usuarioSeleccionado == miembro.0
-                                    ) {
-                                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                            usuarioSeleccionado = miembro.0
-                                            validacionActiva = true
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-                        
-                        // Input de monto con diseño moderno
-                        VStack(alignment: .leading, spacing: 15) {
-                            Text("Monto del aporte")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                            
-                            VStack(spacing: 12) {
-                                // Campo de entrada principal
-                                HStack {
-                                    Text("$")
-                                        .font(.title2)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.secondary)
-                                    
-                                    TextField("0.00", text: $montoTexto)
-                                        .font(.title2)
-                                        .fontWeight(.medium)
-                                        .keyboardType(.decimalPad)
-                                        .onChange(of: montoTexto) { newValue in
-                                            if let valor = Double(newValue) {
-                                                monto = valor
-                                                withAnimation(.easeInOut(duration: 0.3)) {
-                                                    animacionMonto = valor > 0
-                                                    mostrarSugerencias = false
-                                                }
-                                                detectarCategoria()
-                                            }
-                                        }
-                                        .onTapGesture {
-                                            withAnimation(.easeInOut(duration: 0.3)) {
-                                                mostrarSugerencias = true
-                                            }
-                                        }
-                                }
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 15)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(colorScheme == .dark ? Color.black.opacity(0.3) : Color.white.opacity(0.8))
-                                        .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(
-                                            animacionMonto ? Color.blue : Color.clear,
-                                            lineWidth: 2
-                                        )
-                                        .animation(.easeInOut(duration: 0.3), value: animacionMonto)
-                                )
-                                
-                                // Sugerencias rápidas
-                                if mostrarSugerencias {
-                                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                                        ForEach(sugerenciasRapidas, id: \.self) { sugerencia in
-                                            Button {
-                                                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                                    montoTexto = String(sugerencia)
-                                                    monto = Double(sugerencia)
-                                                    mostrarSugerencias = false
-                                                    animacionMonto = true
-                                                }
-                                                detectarCategoria()
-                                            } label: {
-                                                Text("$\(sugerencia)")
-                                                    .font(.caption)
-                                                    .fontWeight(.medium)
-                                                    .foregroundColor(.blue)
-                                                    .padding(.horizontal, 12)
-                                                    .padding(.vertical, 8)
-                                                    .background(Color.blue.opacity(0.1))
-                                                    .cornerRadius(8)
-                                            }
-                                        }
-                                    }
-                                    .transition(.scale.combined(with: .opacity))
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-                        
-                        // Detección automática de categoría
-                        if let categoria = categoriaDetectada {
-                            HStack {
-                                Image(systemName: categoria.icono)
-                                    .foregroundColor(.blue)
-                                Text("Categoría detectada: \(categoria.displayName)")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                Spacer()
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 12)
-                            .background(Color.blue.opacity(0.1))
-                            .cornerRadius(10)
-                            .padding(.horizontal)
-                            .transition(.scale.combined(with: .opacity))
-                        }
-                        
-                        // Notas expandibles
-                        VStack(alignment: .leading, spacing: 15) {
-                            HStack {
-                                Text("Notas (opcional)")
-                                    .font(.headline)
-                                    .foregroundColor(.primary)
-                                
-                                Spacer()
-                                
-                                Button {
-                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                        mostrarNotasCompletas.toggle()
-                                    }
-                                } label: {
-                                    Image(systemName: mostrarNotasCompletas ? "chevron.up" : "chevron.down")
-                                        .foregroundColor(.blue)
-                                        .font(.caption)
-                                }
-                            }
-                            
-                            if mostrarNotasCompletas {
-                                TextField(placeholderInteligente, text: $comentario, axis: .vertical)
-                                    .lineLimit(3...6)
-                                    .padding(.horizontal, 15)
-                                    .padding(.vertical, 12)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(colorScheme == .dark ? Color.black.opacity(0.3) : Color.white.opacity(0.8))
-                                            .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
-                                    )
-                                    .transition(.scale.combined(with: .opacity))
-                            }
-                        }
-                        .padding(.horizontal)
-                        
-                        // Preview en tiempo real
-                        if monto > 0 && !usuarioSeleccionado.isEmpty {
-                            VStack(spacing: 12) {
-                                Text("Vista previa")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.secondary)
-                                
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        HStack {
-                                            Text(emojiParaUsuario(usuarioSeleccionado))
-                                            Text(usuarioSeleccionado)
-                                                .fontWeight(.medium)
-                                        }
-                                        
-                                        Text("Aporte: $\(monto, specifier: "%.2f")")
-                                            .font(.title3)
-                                            .fontWeight(.bold)
-                                            .foregroundColor(.green)
-                                        
-                                        if !comentario.isEmpty {
-                                            Text(comentario)
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                                .lineLimit(2)
-                                        }
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    VStack(alignment: .trailing, spacing: 4) {
-                                        Text("Nuevo total")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                        
-                                        Text("$\(viewModel.totalAportes + monto, specifier: "%.2f")")
-                                            .font(.subheadline)
-                                            .fontWeight(.bold)
-                                            .foregroundColor(.blue)
-                                    }
-                                }
-                                .padding()
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(colorScheme == .dark ? Color.green.opacity(0.1) : Color.green.opacity(0.05))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(Color.green.opacity(0.3), lineWidth: 1)
-                                        )
-                                )
-                            }
-                            .padding(.horizontal)
-                            .transition(.scale.combined(with: .opacity))
-                        }
-                        
+                        headerSection
+                        selectorMiembrosSection
+                        inputMontoSection
+                        categoriaDetectadaSection
+                        notasSection
+                        previewSection
                         Spacer(minLength: 100)
                     }
                 }
             }
-            .background(
-                // Fondo glassmorphism
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        colorScheme == .dark ? Color.black.opacity(0.7) : Color.white.opacity(0.9),
-                        colorScheme == .dark ? Color.blue.opacity(0.1) : Color.blue.opacity(0.05)
-                    ]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
-            )
-            .navigationBarTitleDisplayMode(.inline)
+            .background(backgroundGradient)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") {
                         dismiss()
                     }
                     .foregroundColor(.red)
                 }
                 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Guardar") {
-                        guardarAporte()
-                    }
-                    .fontWeight(.bold)
-                    .foregroundColor(formularioValido ? .blue : .gray)
-                    .disabled(!formularioValido)
-                    .scaleEffect(validacionActiva && formularioValido ? 1.05 : 1.0)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: validacionActiva)
+                ToolbarItem(placement: .confirmationAction) {
+                    saveButton
                 }
             }
         }
@@ -813,6 +570,274 @@ struct NuevoAporteView: View {
                 usuarioSeleccionado = miembrosFamilia.first?.0 ?? ""
             }
         }
+    }
+    
+    // MARK: - View Components
+    
+    private var headerSection: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Text("💰")
+                    .font(.title)
+                Text("Agregar Aporte")
+                    .font(.title2)
+                    .fontWeight(.bold)
+            }
+            
+            Text("Registra un nuevo ingreso al presupuesto familiar")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.top, 20)
+    }
+    
+    private var selectorMiembrosSection: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            Text("¿Quién realiza el aporte?")
+                .font(.headline)
+                .foregroundColor(.primary)
+            
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 15), count: 2), spacing: 15) {
+                ForEach(miembrosFamilia, id: \.0) { miembro in
+                    BotonMiembro(
+                        nombre: miembro.0,
+                        emoji: miembro.1,
+                        color: miembro.2,
+                        isSeleccionado: usuarioSeleccionado == miembro.0
+                    ) {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                            usuarioSeleccionado = miembro.0
+                            validacionActiva = true
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal)
+    }
+    
+    private var inputMontoSection: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            Text("Monto del aporte")
+                .font(.headline)
+                .foregroundColor(.primary)
+            
+            VStack(spacing: 12) {
+                // Campo de entrada principal
+                HStack {
+                    Text("$")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.secondary)
+                    
+                    TextField("0.00", text: $montoTexto)
+                        .font(.title2)
+                        .fontWeight(.medium)
+                        .onChange(of: montoTexto) { newValue in
+                            if let valor = Double(newValue) {
+                                monto = valor
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    animacionMonto = valor > 0
+                                    mostrarSugerencias = false
+                                }
+                                detectarCategoria()
+                            }
+                        }
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                mostrarSugerencias = true
+                            }
+                        }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 15)
+                .background(inputBackground)
+                .overlay(inputBorder)
+                
+                // Sugerencias rápidas
+                if mostrarSugerencias {
+                    sugerenciasRapidasGrid
+                }
+            }
+        }
+        .padding(.horizontal)
+    }
+    
+    private var inputBackground: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(colorScheme == .dark ? Color.black.opacity(0.3) : Color.white.opacity(0.8))
+            .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
+    }
+    
+    private var inputBorder: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .stroke(
+                animacionMonto ? Color.blue : Color.clear,
+                lineWidth: 2
+            )
+            .animation(.easeInOut(duration: 0.3), value: animacionMonto)
+    }
+    
+    private var sugerenciasRapidasGrid: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+            ForEach(sugerenciasRapidas, id: \.self) { sugerencia in
+                Button {
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                        montoTexto = String(sugerencia)
+                        monto = Double(sugerencia)
+                        mostrarSugerencias = false
+                        animacionMonto = true
+                    }
+                    detectarCategoria()
+                } label: {
+                    Text("$\(sugerencia)")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(8)
+                }
+            }
+        }
+        .transition(.scale.combined(with: .opacity))
+    }
+    
+    @ViewBuilder
+    private var categoriaDetectadaSection: some View {
+        if let categoria = categoriaDetectada {
+            HStack {
+                Image(systemName: categoria.icono)
+                    .foregroundColor(.blue)
+                Text("Categoría detectada: \(categoria.displayName)")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(Color.blue.opacity(0.1))
+            .cornerRadius(10)
+            .padding(.horizontal)
+            .transition(.scale.combined(with: .opacity))
+        }
+    }
+    
+    private var notasSection: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            HStack {
+                Text("Notas (opcional)")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                Button {
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                        mostrarNotasCompletas.toggle()
+                    }
+                } label: {
+                    Image(systemName: mostrarNotasCompletas ? "chevron.up" : "chevron.down")
+                        .foregroundColor(.blue)
+                        .font(.caption)
+                }
+            }
+            
+            if mostrarNotasCompletas {
+                TextField(placeholderInteligente, text: $comentario, axis: .vertical)
+                    .lineLimit(3...6)
+                    .padding(.horizontal, 15)
+                    .padding(.vertical, 12)
+                    .background(inputBackground)
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .padding(.horizontal)
+    }
+    
+    @ViewBuilder
+    private var previewSection: some View {
+        if monto > 0 && !usuarioSeleccionado.isEmpty {
+            VStack(spacing: 12) {
+                Text("Vista previa")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
+                
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(emojiParaUsuario(usuarioSeleccionado))
+                            Text(usuarioSeleccionado)
+                                .fontWeight(.medium)
+                        }
+                        
+                        Text("Aporte: $\(monto, specifier: "%.2f")")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(.green)
+                        
+                        if !comentario.isEmpty {
+                            Text(comentario)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .lineLimit(2)
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("Nuevo total")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("$\(viewModel.totalAportes + monto, specifier: "%.2f")")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.blue)
+                    }
+                }
+                .padding()
+                .background(previewBackground)
+            }
+            .padding(.horizontal)
+            .transition(.scale.combined(with: .opacity))
+        }
+    }
+    
+    private var previewBackground: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(colorScheme == .dark ? Color.green.opacity(0.1) : Color.green.opacity(0.05))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.green.opacity(0.3), lineWidth: 1)
+            )
+    }
+    
+    private var saveButton: some View {
+        Button("Guardar") {
+            guardarAporte()
+        }
+        .fontWeight(.bold)
+        .foregroundColor(formularioValido ? .blue : .gray)
+        .disabled(!formularioValido)
+        .scaleEffect(validacionActiva && formularioValido ? 1.05 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: validacionActiva)
+    }
+    
+    private var backgroundGradient: some View {
+        LinearGradient(
+            gradient: Gradient(colors: [
+                colorScheme == .dark ? Color.black.opacity(0.7) : Color.white.opacity(0.9),
+                colorScheme == .dark ? Color.blue.opacity(0.1) : Color.blue.opacity(0.05)
+            ]),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
     }
     
     // MARK: - Computed Properties
