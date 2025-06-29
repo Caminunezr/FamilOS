@@ -27,7 +27,7 @@ class CategoriaProveedorManager: ObservableObject {
     
     /// Estructura para categorías personalizadas creadas por el usuario
     struct CategoriaPersonalizada: Codable, Identifiable {
-        let id = UUID()
+        let id = UUID().uuidString
         var nombre: String
         var descripcion: String
         var icono: String

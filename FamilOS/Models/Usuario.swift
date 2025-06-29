@@ -1,7 +1,7 @@
 import Foundation
 
 struct Usuario: Identifiable, Codable, Equatable {
-    var id: UUID = UUID()
+    var id: String = UUID().uuidString
     var nombre: String
     var email: String
     var contrasena: String

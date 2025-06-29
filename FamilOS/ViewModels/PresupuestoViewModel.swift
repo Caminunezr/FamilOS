@@ -4,7 +4,7 @@ import Combine
 
 // MARK: - Estructuras para el cruce de datos
 struct CategoriaPresupuestoAnalisis: Identifiable {
-    let id = UUID()
+    let id = UUID().uuidString
     let nombre: String
     let icono: String
     let presupuestoMensual: Double
@@ -85,7 +85,7 @@ struct ResumenFinancieroIntegrado {
 }
 
 struct AlertaFinanciera: Identifiable {
-    let id = UUID()
+    let id = UUID().uuidString
     let tipo: TipoAlerta
     let mensaje: String
     let categoria: String?
@@ -247,12 +247,12 @@ class PresupuestoViewModel: ObservableObject {
         objectWillChange.send()
     }
     
-    func eliminarAporte(id: UUID) {
+    func eliminarAporte(id: String) {
         aportes.removeAll(where: { $0.id == id })
         objectWillChange.send()
     }
     
-    func eliminarDeuda(id: UUID) {
+    func eliminarDeuda(id: String) {
         deudas.removeAll(where: { $0.id == id })
         objectWillChange.send()
     }

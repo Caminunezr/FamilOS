@@ -374,7 +374,7 @@ struct GraficoGastos: View {
 struct AportesListView: View {
     let aportes: [Aporte]
     let total: Double
-    let onDelete: (UUID) -> Void
+    let onDelete: (String) -> Void
     
     var body: some View {
         VStack(spacing: 15) {
@@ -438,7 +438,7 @@ struct AportesListView: View {
 struct DeudasListView: View {
     let deudas: [DeudaPresupuesto]
     let total: Double
-    let onDelete: (UUID) -> Void
+    let onDelete: (String) -> Void
     
     var body: some View {
         VStack(spacing: 15) {

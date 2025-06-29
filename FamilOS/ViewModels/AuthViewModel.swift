@@ -1,6 +1,10 @@
 import Foundation
 import SwiftUI
 import LocalAuthentication
+import FirebaseCore
+import FirebaseAuth
+import FirebaseDatabase
+import Network
 
 class AuthViewModel: ObservableObject {
     @Published var usuarioActual: Usuario?
@@ -8,32 +12,98 @@ class AuthViewModel: ObservableObject {
     @Published var isAuthenticating: Bool = false
     @Published var error: String?
     @Published var mostrarRegistro: Bool = false
+    @Published var networkStatus: NWPath.Status = .satisfied
     
-    // Para almacenar usuarios de prueba (en una aplicación real usaríamos Core Data o iCloud)
-    private var usuarios: [Usuario] = []
+    private var databaseRef = Database.database().reference()
+    private let networkMonitor = NWPathMonitor()
+    private let networkQueue = DispatchQueue(label: "NetworkMonitor")
     
     init() {
-        #if DEBUG
-        // Solo en modo debug, creamos usuarios de prueba
-        let usuarioPrincipal = Usuario(
-            nombre: "Usuario Principal",
-            email: "usuario@familos.app",
-            contrasena: "123456",
-            esPrincipal: true
-        )
+        // Configurar monitoreo de red
+        setupNetworkMonitoring()
         
-        let usuarioSecundario = Usuario(
-            nombre: "Usuario Secundario",
-            email: "secundario@familos.app",
-            contrasena: "123456",
-            esPrincipal: false
-        )
+        // Verificar si hay un usuario autenticado
+        verificarUsuarioAutenticado()
+    }
+    
+    // MARK: - Network Monitoring
+    private func setupNetworkMonitoring() {
+        networkMonitor.pathUpdateHandler = { [weak self] path in
+            DispatchQueue.main.async {
+                self?.networkStatus = path.status
+                print("Network status changed: \(path.status)")
+                
+                if path.status == .satisfied {
+                    print("✅ Network is available")
+                } else {
+                    print("❌ Network is not available")
+                    self?.error = "Sin conexión a internet. Verifica tu red."
+                }
+            }
+        }
+        networkMonitor.start(queue: networkQueue)
+    }
+    
+    // Verificar si hay un usuario autenticado actualmente
+    private func verificarUsuarioAutenticado() {
+        _ = Auth.auth().addStateDidChangeListener { [weak self] auth, user in
+            DispatchQueue.main.async {
+                if let firebaseUser = user {
+                    // Usuario autenticado, cargar datos del usuario
+                    self?.cargarDatosUsuario(uid: firebaseUser.uid)
+                } else {
+                    // No hay usuario autenticado
+                    self?.usuarioActual = nil
+                    self?.isAuthenticated = false
+                }
+            }
+        }
+    }
+    
+    // Cargar datos del usuario desde Firebase Database
+    private func cargarDatosUsuario(uid: String) {
+        databaseRef.child("usuarios").child(uid).observeSingleEvent(of: .value) { [weak self] snapshot, _ in
+            DispatchQueue.main.async {
+                if let datos = snapshot.value as? [String: Any],
+                   let nombre = datos["nombre"] as? String,
+                   let email = datos["email"] as? String {
+                    
+                    let esPrincipal = datos["esPrincipal"] as? Bool ?? false
+                    
+                    self?.usuarioActual = Usuario(
+                        id: uid,
+                        nombre: nombre,
+                        email: email,
+                        contrasena: "", // No almacenamos la contraseña
+                        esPrincipal: esPrincipal
+                    )
+                    self?.isAuthenticated = true
+                } else {
+                    // Si no hay datos en la DB, crear perfil básico
+                    self?.crearPerfilUsuario(uid: uid)
+                }
+            }
+        }
+    }
+    
+    // Crear perfil de usuario en Firebase Database
+    private func crearPerfilUsuario(uid: String) {
+        guard let firebaseUser = Auth.auth().currentUser else { return }
         
-        usuarios = [usuarioPrincipal, usuarioSecundario]
+        let datosUsuario: [String: Any] = [
+            "nombre": firebaseUser.displayName ?? "Usuario",
+            "email": firebaseUser.email ?? "",
+            "esPrincipal": true, // El primer usuario siempre es principal
+            "fechaCreacion": ServerValue.timestamp()
+        ]
         
-        // Verificar si hay credenciales guardadas
-        verificarCredencialesGuardadas()
-        #endif
+        databaseRef.child("usuarios").child(uid).setValue(datosUsuario) { [weak self] error, _ in
+            DispatchQueue.main.async {
+                if error == nil {
+                    self?.cargarDatosUsuario(uid: uid)
+                }
+            }
+        }
     }
     
     // Inicio de sesión con email y contraseña
@@ -41,19 +111,16 @@ class AuthViewModel: ObservableObject {
         isAuthenticating = true
         error = nil
         
-        // Simular una demora de red
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            // Buscar usuario que coincida
-            if let usuario = self.usuarios.first(where: { $0.email == email && $0.contrasena == contrasena }) {
-                self.usuarioActual = usuario
-                self.isAuthenticated = true
-                self.isAuthenticating = false
+        Auth.auth().signIn(withEmail: email, password: contrasena) { [weak self] result, error in
+            DispatchQueue.main.async {
+                self?.isAuthenticating = false
                 
-                // Guardar credenciales
-                self.guardarCredenciales(email: email, contrasena: contrasena)
-            } else {
-                self.error = "Credenciales incorrectas. Por favor intenta de nuevo."
-                self.isAuthenticating = false
+                if let error = error {
+                    self?.error = self?.obtenerMensajeError(error) ?? "Error desconocido"
+                } else {
+                    // El listener de Auth se encargará de actualizar el estado
+                    self?.guardarCredenciales(email: email, contrasena: contrasena)
+                }
             }
         }
     }
@@ -96,8 +163,12 @@ class AuthViewModel: ObservableObject {
     
     // Cerrar sesión
     func logout() {
-        usuarioActual = nil
-        isAuthenticated = false
+        do {
+            try Auth.auth().signOut()
+            // El listener de Auth se encargará de actualizar el estado
+        } catch {
+            self.error = "Error al cerrar sesión: \(error.localizedDescription)"
+        }
     }
     
     // Registrar un nuevo usuario
@@ -105,33 +176,43 @@ class AuthViewModel: ObservableObject {
         isAuthenticating = true
         error = nil
         
-        // Verificar si el email ya existe
-        if usuarios.contains(where: { $0.email == email }) {
-            error = "Este correo ya está registrado. Por favor usa otro."
-            isAuthenticating = false
-            return
+        Auth.auth().createUser(withEmail: email, password: contrasena) { [weak self] result, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    self?.error = self?.obtenerMensajeError(error) ?? "Error desconocido"
+                    self?.isAuthenticating = false
+                } else if let user = result?.user {
+                    // Actualizar el nombre del usuario en Firebase Auth
+                    let changeRequest = user.createProfileChangeRequest()
+                    changeRequest.displayName = nombre
+                    changeRequest.commitChanges { _ in
+                        // Crear perfil en Database
+                        self?.crearPerfilUsuarioRegistro(uid: user.uid, nombre: nombre, email: email)
+                    }
+                    
+                    // Guardar credenciales
+                    self?.guardarCredenciales(email: email, contrasena: contrasena)
+                }
+            }
         }
+    }
+    
+    // Crear perfil de usuario durante el registro
+    private func crearPerfilUsuarioRegistro(uid: String, nombre: String, email: String) {
+        let datosUsuario: [String: Any] = [
+            "nombre": nombre,
+            "email": email,
+            "esPrincipal": true, // Por defecto es principal
+            "fechaCreacion": ServerValue.timestamp()
+        ]
         
-        // Simular una demora de red
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            // Crear nuevo usuario
-            let nuevoUsuario = Usuario(
-                nombre: nombre,
-                email: email,
-                contrasena: contrasena,
-                esPrincipal: self.usuarios.isEmpty // Si es el primer usuario, es principal
-            )
-            
-            // Agregar a la lista
-            self.usuarios.append(nuevoUsuario)
-            
-            // Autenticar al usuario recién registrado
-            self.usuarioActual = nuevoUsuario
-            self.isAuthenticated = true
-            self.isAuthenticating = false
-            
-            // Guardar credenciales
-            self.guardarCredenciales(email: email, contrasena: contrasena)
+        databaseRef.child("usuarios").child(uid).setValue(datosUsuario) { [weak self] error, _ in
+            DispatchQueue.main.async {
+                self?.isAuthenticating = false
+                if let error = error {
+                    self?.error = "Error al crear perfil: \(error.localizedDescription)"
+                }
+            }
         }
     }
     
@@ -141,17 +222,207 @@ class AuthViewModel: ObservableObject {
         UserDefaults.standard.set(contrasena, forKey: "savedPassword")
     }
     
-    private func verificarCredencialesGuardadas() {
-        if let savedEmail = UserDefaults.standard.string(forKey: "savedEmail"),
-           let savedPassword = UserDefaults.standard.string(forKey: "savedPassword") {
-            // En lugar de hacer login automático, solo guardamos las credenciales
-            // para usarlas con autenticación biométrica
-            return
+    // Obtener mensaje de error amigable
+    private func obtenerMensajeError(_ error: Error) -> String {
+        print("🚨 Firebase Error: \(error)")
+        print("Error Code: \((error as NSError).code)")
+        print("Error Domain: \((error as NSError).domain)")
+        print("Error Description: \(error.localizedDescription)")
+        
+        // Detectar errores específicos de red/DNS
+        let errorDescription = error.localizedDescription.lowercased()
+        if errorDescription.contains("server with the specified hostname could not be found") ||
+           errorDescription.contains("dns") ||
+           errorDescription.contains("dnservicecreatedelegateconnection") {
+            return "Error de DNS/Red: La aplicación no puede resolver nombres de dominio. Esto puede ser debido a restricciones del sandbox de macOS. Verifica los entitlements de red."
         }
+        
+        if let authError = error as NSError? {
+            switch authError.code {
+            case AuthErrorCode.wrongPassword.rawValue:
+                return "Contraseña incorrecta. Verifica tus credenciales."
+            case AuthErrorCode.userNotFound.rawValue:
+                return "No existe una cuenta con este correo electrónico."
+            case AuthErrorCode.emailAlreadyInUse.rawValue:
+                return "Este correo electrónico ya está registrado."
+            case AuthErrorCode.invalidEmail.rawValue:
+                return "El formato del correo electrónico no es válido."
+            case AuthErrorCode.weakPassword.rawValue:
+                return "La contraseña debe tener al menos 6 caracteres."
+            case AuthErrorCode.networkError.rawValue:
+                // Análisis más detallado del error de red
+                if errorDescription.contains("could not be found") {
+                    return "Error de DNS: No se puede resolver el servidor de Firebase. Verifica que la aplicación tenga permisos de red en el sandbox de macOS."
+                }
+                return "Error de conexión con Firebase. Verifica tu internet y configuración de red."
+            case AuthErrorCode.tooManyRequests.rawValue:
+                return "Demasiados intentos fallidos. Espera un momento antes de intentar nuevamente."
+            case AuthErrorCode.userDisabled.rawValue:
+                return "Esta cuenta ha sido deshabilitada."
+            case AuthErrorCode.invalidAPIKey.rawValue:
+                return "Error de configuración de Firebase. Verifica la clave API."
+            case AuthErrorCode.appNotAuthorized.rawValue:
+                return "La aplicación no está autorizada para usar Firebase Authentication."
+            case AuthErrorCode.keychainError.rawValue:
+                return "Error de Keychain: La aplicación no tiene permisos para acceder al almacén seguro de macOS. Esto se debe a entitlements faltantes."
+            case 17995: // ERROR_KEYCHAIN_ERROR específico
+                return "Error de acceso al Keychain: Falta el entitlement 'keychain-access-groups'. Firebase requiere acceso al Keychain para almacenar tokens de autenticación."
+            default:
+                // Verificar si es error de keychain por descripción
+                if errorDescription.contains("keychain") || errorDescription.contains("secitemadd") {
+                    return "Error de Keychain (-34018): Falta el entitlement 'keychain-access-groups' para acceder al almacén seguro de macOS."
+                }
+                print("Error no manejado específicamente: \(authError.localizedDescription)")
+                return "Error: \(authError.localizedDescription)"
+            }
+        }
+        return error.localizedDescription
     }
     
     // Verificar si hay algún usuario registrado
     var hayUsuariosRegistrados: Bool {
-        return !usuarios.isEmpty
+        return Auth.auth().currentUser != nil
+    }
+    
+    // Función para resetear contraseña
+    func resetearContrasena(email: String, completion: @escaping (Bool, String?) -> Void) {
+        Auth.auth().sendPasswordReset(withEmail: email) { error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    completion(false, self.obtenerMensajeError(error))
+                } else {
+                    completion(true, nil)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Diagnóstico de Firebase
+    
+    func verificarConfiguracionFirebase() -> String {
+        var diagnostico = "=== Diagnóstico Firebase ===\n"
+        
+        // Verificar estado de red
+        diagnostico += "🌐 Estado de red: \(networkStatus)\n"
+        
+        // Verificar si Firebase está configurado
+        if let app = FirebaseApp.app() {
+            diagnostico += "✅ Firebase App configurada\n"
+            diagnostico += "Project ID: \(app.options.projectID ?? "No definido")\n"
+            diagnostico += "API Key: \((app.options.apiKey?.isEmpty == false) ? "✅ Configurada" : "❌ Vacía")\n"
+            diagnostico += "Bundle ID: \(app.options.bundleID)\n"
+            diagnostico += "Database URL: \(app.options.databaseURL ?? "No definida")\n"
+        } else {
+            diagnostico += "❌ Firebase App NO configurada\n"
+        }
+        
+        // Verificar Auth
+        let auth = Auth.auth()
+        diagnostico += "Auth configurado: \(auth.currentUser == nil ? "Sin usuario" : "Con usuario")\n"
+        
+        // Verificar Database
+        let database = Database.database()
+        diagnostico += "Database configurado: ✅\n"
+        
+        // Verificar entitlements
+        diagnostico += "\n=== Entitlements ===\n"
+        let bundle = Bundle.main
+        if let sandbox = bundle.object(forInfoDictionaryKey: "com.apple.security.app-sandbox") {
+            diagnostico += "App Sandbox: \(sandbox)\n"
+        }
+        if let networkClient = bundle.object(forInfoDictionaryKey: "com.apple.security.network.client") {
+            diagnostico += "Network Client: \(networkClient)\n"
+        } else {
+            diagnostico += "❌ Network Client: NO ENCONTRADO\n"
+        }
+        if let networkServer = bundle.object(forInfoDictionaryKey: "com.apple.security.network.server") {
+            diagnostico += "Network Server: \(networkServer)\n"
+        } else {
+            diagnostico += "❌ Network Server: NO ENCONTRADO\n"
+        }
+        
+        return diagnostico
+    }
+    
+    func testConexionFirebase() {
+        print("🧪 Testing Firebase connection...")
+        
+        // Verificar estado de red primero
+        if networkStatus != .satisfied {
+            print("❌ Red no disponible - Status: \(networkStatus)")
+            DispatchQueue.main.async {
+                self.error = "Red no disponible. Estado: \(self.networkStatus)"
+            }
+            return
+        }
+        
+        // Test de DNS básico
+        testDNSResolution { [weak self] dnsWorking in
+            if !dnsWorking {
+                DispatchQueue.main.async {
+                    self?.error = "❌ DNS no funciona. Problema de resolución de nombres."
+                }
+                return
+            }
+            
+            // Si DNS funciona, probar Firebase
+            self?.testFirebaseConnection()
+        }
+    }
+    
+    private func testDNSResolution(completion: @escaping (Bool) -> Void) {
+        // Test simple de DNS resolviendo google.com
+        let host = NWEndpoint.Host("google.com")
+        let port = NWEndpoint.Port(80)
+        let connection = NWConnection(host: host, port: port, using: .tcp)
+        
+        connection.stateUpdateHandler = { state in
+            switch state {
+            case .ready:
+                print("✅ DNS/Network básico funcionando")
+                connection.cancel()
+                completion(true)
+            case .failed(let error):
+                print("❌ DNS/Network falló: \(error)")
+                connection.cancel()
+                completion(false)
+            default:
+                break
+            }
+        }
+        
+        connection.start(queue: networkQueue)
+        
+        // Timeout después de 5 segundos
+        DispatchQueue.global().asyncAfter(deadline: .now() + 5) {
+            connection.cancel()
+            completion(false)
+        }
+    }
+    
+    private func testFirebaseConnection() {
+        print("🔥 Testing Firebase Auth connection...")
+        
+        // Test simple de conexión a Firebase Auth
+        Auth.auth().fetchSignInMethods(forEmail: "test@test.com") { methods, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    print("❌ Error de conexión Firebase: \(error)")
+                    
+                    // Analizar el tipo de error específico
+                    let nsError = error as NSError
+                    if nsError.domain.contains("NSURLErrorDomain") && nsError.code == -1003 {
+                        self.error = "❌ DNS Error: No se puede resolver googleapis.com. Verifica tu configuración de DNS."
+                    } else if nsError.code == -65563 {
+                        self.error = "❌ DNS Service Error: El servicio de DNS no está funcionando. Posible problema de sandboxing."
+                    } else {
+                        self.error = "❌ Error Firebase: \(error.localizedDescription)"
+                    }
+                } else {
+                    print("✅ Conexión a Firebase exitosa")
+                    self.error = "✅ Conexión a Firebase exitosa"
+                }
+            }
+        }
     }
 }

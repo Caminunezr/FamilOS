@@ -1,7 +1,7 @@
 import Foundation
 
 struct PresupuestoMensual: Identifiable, Codable {
-    var id: UUID = UUID()
+    var id: String = UUID().uuidString
     var fechaMes: Date
     var creador: String
     var cerrado: Bool = false
@@ -17,8 +17,8 @@ struct PresupuestoMensual: Identifiable, Codable {
 }
 
 struct Aporte: Identifiable, Codable {
-    var id: UUID = UUID()
-    var presupuestoId: UUID
+    var id: String = UUID().uuidString
+    var presupuestoId: String
     var usuario: String
     var monto: Double
     var comentario: String = ""
@@ -26,8 +26,8 @@ struct Aporte: Identifiable, Codable {
 }
 
 struct DeudaPresupuesto: Identifiable, Codable {
-    var id: UUID = UUID()
-    var presupuestoId: UUID
+    var id: String = UUID().uuidString
+    var presupuestoId: String
     var categoria: String
     var montoTotal: Double
     var cuotasTotales: Int

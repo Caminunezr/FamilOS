@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 struct Cuenta: Identifiable, Codable {
-    var id: UUID = UUID()
+    var id: String = UUID().uuidString
     var monto: Double
     var proveedor: String
     var fechaEmision: Date?

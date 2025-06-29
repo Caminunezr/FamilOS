@@ -199,6 +199,17 @@ struct LoginView: View {
                     .transition(.opacity)
             }
             
+            // Estado de la red
+            HStack {
+                Circle()
+                    .fill(authViewModel.networkStatus == .satisfied ? Color.green : Color.red)
+                    .frame(width: 8, height: 8)
+                Text("Red: \(authViewModel.networkStatus == .satisfied ? "Conectado" : "Sin conexión")")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.gray)
+                Spacer()
+            }
+            
             // Botones de acción
             VStack(spacing: 16) {
                 // Botón principal de login
@@ -277,6 +288,58 @@ struct LoginView: View {
                     .disabled(authViewModel.isAuthenticating)
                     .buttonStyle(.plain)
                 }
+                
+                // Botón de diagnóstico para problemas de conexión
+                if authViewModel.networkStatus != .satisfied || authViewModel.error?.contains("conexión") == true {
+                    Button(action: {
+                        print("🔧 DIAGNÓSTICO FIREBASE:")
+                        print(authViewModel.verificarConfiguracionFirebase())
+                        authViewModel.testConexionFirebase()
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "wifi.exclamationmark")
+                                .font(.system(size: 12))
+                            Text("Diagnosticar Conexión")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .foregroundColor(.orange)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.orange.opacity(0.1))
+                        .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                }
+                
+                // Botón de diagnóstico avanzado (solo en DEBUG)
+                #if DEBUG
+                Button(action: {
+                    print("🔧 DIAGNÓSTICO COMPLETO:")
+                    print(authViewModel.verificarConfiguracionFirebase())
+                    authViewModel.testConexionFirebase()
+                    
+                    // Verificar entitlements
+                    print("� VERIFICANDO ENTITLEMENTS...")
+                    let bundle = Bundle.main
+                    if let entitlements = bundle.object(forInfoDictionaryKey: "com.apple.security.app-sandbox") {
+                        print("App Sandbox: \(entitlements)")
+                    }
+                    if let networkClient = bundle.object(forInfoDictionaryKey: "com.apple.security.network.client") {
+                        print("Network Client: \(networkClient)")
+                    } else {
+                        print("⚠️ Network Client entitlement no encontrado")
+                    }
+                }) {
+                    Text("🔧 Diagnóstico Completo")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.orange)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.orange.opacity(0.1))
+                        .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+                #endif
             }
             .padding(.top, 8)
         }

@@ -8,13 +8,7 @@
 	<true/>
 	<key>com.apple.security.network.server</key>
 	<true/>
-	<key>keychain-access-groups</key>
-	<array>
-		<string>$(AppIdentifierPrefix)CamNR.FamilOS</string>
-	</array>
-	<key>com.apple.security.application-groups</key>
-	<array>
-		<string>$(TeamIdentifierPrefix)CamNR.FamilOS.shared</string>
-	</array>
+	<key>com.apple.security.network.outgoing</key>
+	<true/>
 </dict>
 </plist>

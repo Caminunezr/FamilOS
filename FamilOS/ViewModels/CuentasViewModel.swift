@@ -281,7 +281,7 @@ class CuentasViewModel: ObservableObject {
     }
     
     struct GastoCategoria: Identifiable {
-        let id = UUID()
+        let id = UUID().uuidString
         let categoria: String
         let total: Double
         let cuentas: Int
@@ -371,7 +371,7 @@ class CuentasViewModel: ObservableObject {
         }
     }
     
-    func eliminarCuenta(id: UUID) {
+    func eliminarCuenta(id: String) {
         cuentas.removeAll { $0.id == id }
         // Aquí se implementaría la persistencia real
     }
@@ -600,7 +600,7 @@ class CuentasViewModel: ObservableObject {
 // MARK: - Estructuras auxiliares para organización temporal
 
 struct AñoCuentas: Identifiable {
-    let id = UUID()
+    let id = UUID().uuidString
     let año: Int
     let cuentas: [Cuenta]
     var meses: [MesCuentas] = []
@@ -621,7 +621,7 @@ struct AñoCuentas: Identifiable {
 }
 
 struct MesCuentas: Identifiable {
-    let id = UUID()
+    let id = UUID().uuidString
     let mes: Int
     let año: Int
     let nombreMes: String
