@@ -6,12 +6,125 @@ struct ContentView: View {
     
     var body: some View {
         Group {
-            if authViewModel.isAuthenticated {
+            if authViewModel.isAuthenticated && authViewModel.familiaActual != nil {
                 MainTabView()
+                    .environmentObject(authViewModel)
+            } else if authViewModel.isAuthenticated && authViewModel.familiaActual == nil {
+                ConfiguracionFamiliarView()
                     .environmentObject(authViewModel)
             } else {
                 LoginView()
                     .environmentObject(authViewModel)
+            }
+        }
+    }
+}
+
+// Vista para configurar la familia (crear o unirse)
+struct ConfiguracionFamiliarView: View {
+    @EnvironmentObject var authViewModel: AuthViewModel
+    @State private var nombreFamilia = ""
+    @State private var descripcionFamilia = ""
+    @State private var codigoInvitacion = ""
+    @State private var modoCreacion = true
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                Image(systemName: "house.fill")
+                    .font(.system(size: 80))
+                    .foregroundColor(.blue)
+                
+                Text("Configurar Familia")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                
+                Text("Para usar FamilOS necesitas crear una familia o unirte a una existente")
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal)
+                
+                Picker("Modo", selection: $modoCreacion) {
+                    Text("Crear Familia").tag(true)
+                    Text("Unirse a Familia").tag(false)
+                }
+                .pickerStyle(SegmentedPickerStyle())
+                .padding(.horizontal)
+                
+                if modoCreacion {
+                    // Formulario para crear familia
+                    VStack(spacing: 15) {
+                        TextField("Nombre de la familia", text: $nombreFamilia)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                        
+                        TextField("Descripción (opcional)", text: $descripcionFamilia)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                        
+                        Button(action: {
+                            authViewModel.crearFamilia(nombre: nombreFamilia, descripcion: descripcionFamilia)
+                        }) {
+                            HStack {
+                                if authViewModel.isAuthenticating {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                } else {
+                                    Image(systemName: "plus.circle.fill")
+                                }
+                                Text("Crear Familia")
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                        }
+                        .disabled(nombreFamilia.isEmpty || authViewModel.isAuthenticating)
+                    }
+                } else {
+                    // Formulario para unirse a familia
+                    VStack(spacing: 15) {
+                        TextField("Código de invitación", text: $codigoInvitacion)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                        
+                        Button(action: {
+                            authViewModel.unirseFamilia(codigoInvitacion: codigoInvitacion)
+                        }) {
+                            HStack {
+                                if authViewModel.isAuthenticating {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                } else {
+                                    Image(systemName: "person.2.fill")
+                                }
+                                Text("Unirse a Familia")
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.green)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                        }
+                        .disabled(codigoInvitacion.isEmpty || authViewModel.isAuthenticating)
+                    }
+                }
+                
+                if let error = authViewModel.error {
+                    Text(error)
+                        .foregroundColor(.red)
+                        .padding()
+                        .background(Color.red.opacity(0.1))
+                        .cornerRadius(10)
+                }
+                
+                Spacer()
+            }
+            .padding()
+            .toolbar {
+                ToolbarItem(placement: .automatic) {
+                    Button("Cerrar Sesión") {
+                        authViewModel.logout()
+                    }
+                }
             }
         }
     }
@@ -60,12 +173,7 @@ struct MainTabView: View {
                 .tag(4)
         }
         .onAppear {
-            // Configurar la integración entre ViewModels
-            presupuestoViewModel.configurarIntegracionCuentas(cuentasViewModel)
-            
-            // Cargar datos de ejemplo
-            cuentasViewModel.cargarDatosEjemplo()
-            presupuestoViewModel.cargarDatosEjemplo()
+            configurarViewModels()
         }
         .toolbar {
             ToolbarItem(placement: .automatic) {
@@ -73,6 +181,12 @@ struct MainTabView: View {
                     if let usuario = authViewModel.usuarioActual {
                         Text(usuario.nombre)
                             .font(.headline)
+                        
+                        if let familia = authViewModel.familiaActual {
+                            Text("Familia: \(familia.nombre)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
                         
                         Divider()
                     }
@@ -87,6 +201,17 @@ struct MainTabView: View {
                 }
             }
         }
+    }
+    
+    private func configurarViewModels() {
+        guard let familiaId = authViewModel.familiaActual?.id else { return }
+        
+        // Configurar la integración entre ViewModels
+        presupuestoViewModel.configurarIntegracionCuentas(cuentasViewModel)
+        
+        // Configurar los ViewModels con la familia actual
+        cuentasViewModel.configurarFamilia(familiaId)
+        presupuestoViewModel.configurarFamilia(familiaId)
     }
 }
 
@@ -112,55 +237,7 @@ struct HistorialView: View {
     }
 }
 
-// Vista de Configuración
-struct ConfiguracionView: View {
-    @EnvironmentObject var authViewModel: AuthViewModel
-    @AppStorage("tema") private var temaModo: Int = 0
-    
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section(header: Text("Perfil")) {
-                    if let usuario = authViewModel.usuarioActual {
-                        Text(usuario.nombre)
-                            .font(.headline)
-                        Text(usuario.email)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                
-                Section(header: Text("Apariencia")) {
-                    Picker("Tema", selection: $temaModo) {
-                        Text("Sistema").tag(0)
-                        Text("Claro").tag(1)
-                        Text("Oscuro").tag(2)
-                    }
-                    .pickerStyle(.segmented)
-                }
-                
-                Section(header: Text("Acerca de")) {
-                    HStack {
-                        Text("Versión")
-                        Spacer()
-                        Text("1.0.0")
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Button("Enviar comentarios") {
-                        // Acción para enviar comentarios
-                    }
-                    
-                    Button("Cerrar sesión") {
-                        authViewModel.logout()
-                    }
-                    .foregroundColor(.red)
-                }
-            }
-            .navigationTitle("Configuración")
-        }
-    }
-}
+
 
 #Preview {
     ContentView()

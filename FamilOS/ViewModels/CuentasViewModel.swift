@@ -9,6 +9,8 @@ class CuentasViewModel: ObservableObject {
     @Published var filtroFechaDesde: Date? = nil
     @Published var filtroFechaHasta: Date? = nil
     @Published var busquedaTexto: String = ""
+    @Published var isLoading: Bool = false
+    @Published var error: String?
     
     // Dashboard por períodos mensuales
     @Published var mesSeleccionado: Date = Date()
@@ -18,6 +20,9 @@ class CuentasViewModel: ObservableObject {
     @Published var añoSeleccionado: Int? = nil
     @Published var vistaOrganizacion: VistaOrganizacion = .porAño
     @Published var filtroEstadoOrganizacion: FiltroEstadoOrganizacion = .todas
+    
+    private let firebaseService = FirebaseService()
+    private var familiaId: String?
     
     enum VistaOrganizacion: String, CaseIterable {
         case porAño = "Por Año"
@@ -66,92 +71,105 @@ class CuentasViewModel: ObservableObject {
         }
     }
     
-    // MARK: - Datos de ejemplo mejorados
-    func cargarDatosEjemplo() {
-        let ahora = Date()
-        let calendario = Calendar.current
+    // MARK: - Configuración
+    
+    func configurarFamilia(_ familiaId: String) {
+        self.familiaId = familiaId
+        cargarCuentasFamiliares()
+    }
+    
+    // MARK: - Carga de datos familiares
+    
+    func cargarCuentasFamiliares() {
+        guard let familiaId = familiaId else { return }
         
-        cuentas = []
+        isLoading = true
+        error = nil
         
-        // Generar cuentas para los últimos 3 meses usando las nuevas categorías
-        for mesOffset in -2...1 {
-            guard let mesBase = calendario.date(byAdding: .month, value: mesOffset, to: ahora) else { continue }
-            
-            // Enel (Luz)
-            let luz = Cuenta(
-                monto: Double.random(in: 800...1200),
-                proveedor: "Enel",
-                fechaVencimiento: calendario.date(byAdding: .day, value: 15, to: mesBase)!,
-                categoria: CategoriaFinanciera.luz.rawValue,
-                creador: "Usuario",
-                fechaEmision: calendario.date(byAdding: .day, value: 1, to: mesBase),
-                descripcion: "Consumo eléctrico del hogar",
-                fechaPago: mesOffset < 0 ? calendario.date(byAdding: .day, value: 12, to: mesBase) : nil
-            )
-            cuentas.append(luz)
-            
-            // Mundo (Internet)
-            let internet = Cuenta(
-                monto: 599.0,
-                proveedor: "Mundo",
-                fechaVencimiento: calendario.date(byAdding: .day, value: 5, to: mesBase)!,
-                categoria: CategoriaFinanciera.internet.rawValue,
-                creador: "Usuario",
-                descripcion: "Internet fibra óptica 200MB",
-                fechaPago: mesOffset < 0 ? calendario.date(byAdding: .day, value: 3, to: mesBase) : nil
-            )
-            cuentas.append(internet)
-            
-            // Aguas Andinas (Agua)
-            let agua = Cuenta(
-                monto: Double.random(in: 200...400),
-                proveedor: "Aguas Andinas",
-                fechaVencimiento: calendario.date(byAdding: .day, value: 20, to: mesBase)!,
-                categoria: CategoriaFinanciera.agua.rawValue,
-                creador: "Usuario",
-                descripcion: "Servicio de agua potable",
-                fechaPago: mesOffset < 0 ? calendario.date(byAdding: .day, value: 18, to: mesBase) : nil
-            )
-            cuentas.append(agua)
-            
-            // Lipigas (Gas)
-            let gas = Cuenta(
-                monto: Double.random(in: 300...600),
-                proveedor: "Lipigas",
-                fechaVencimiento: calendario.date(byAdding: .day, value: 10, to: mesBase)!,
-                categoria: CategoriaFinanciera.gas.rawValue,
-                creador: "Usuario",
-                descripcion: "Gas licuado",
-                fechaPago: mesOffset < 0 ? calendario.date(byAdding: .day, value: 8, to: mesBase) : nil
-            )
-            cuentas.append(gas)
-            
-            // Veterinario (Mascotas)
-            if mesOffset >= -1 {
-                let mascotas = Cuenta(
-                    monto: Double.random(in: 150...350),
-                    proveedor: "Veterinario",
-                    fechaVencimiento: calendario.date(byAdding: .day, value: 25, to: mesBase)!,
-                    categoria: CategoriaFinanciera.mascotas.rawValue,
-                    creador: "Usuario",
-                    descripcion: "Control veterinario y comida",
-                    fechaPago: mesOffset < 0 ? calendario.date(byAdding: .day, value: 20, to: mesBase) : nil
-                )
-                cuentas.append(mascotas)
+        Task {
+            do {
+                let cuentasFamiliares = try await firebaseService.obtenerCuentasFamilia(familiaId: familiaId)
+                
+                await MainActor.run {
+                    self.cuentas = cuentasFamiliares
+                    self.isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.error = "Error al cargar cuentas: \(error.localizedDescription)"
+                    self.isLoading = false
+                }
             }
-            
-            // Gastos del hogar
-            let hogar = Cuenta(
-                monto: Double.random(in: 800...1500),
-                proveedor: "Feria",
-                fechaVencimiento: calendario.date(byAdding: .day, value: 30, to: mesBase)!,
-                categoria: CategoriaFinanciera.hogar.rawValue,
-                creador: "Usuario",
-                descripcion: "Compras del hogar y feria",
-                fechaPago: mesOffset < 0 ? calendario.date(byAdding: .day, value: 25, to: mesBase) : nil
-            )
-            cuentas.append(hogar)
         }
+    }
+    
+    // MARK: - Gestión de cuentas
+    
+    func agregarCuenta(_ cuenta: Cuenta) {
+        guard let familiaId = familiaId else { return }
+        
+        isLoading = true
+        error = nil
+        
+        Task {
+            do {
+                try await firebaseService.crearCuenta(cuenta, familiaId: familiaId)
+                await cargarCuentasFamiliares() // Recargar para obtener la versión actualizada
+            } catch {
+                await MainActor.run {
+                    self.error = "Error al agregar cuenta: \(error.localizedDescription)"
+                    self.isLoading = false
+                }
+            }
+        }
+    }
+    
+    func actualizarCuenta(_ cuenta: Cuenta) {
+        guard let familiaId = familiaId else { return }
+        
+        isLoading = true
+        error = nil
+        
+        Task {
+            do {
+                try await firebaseService.actualizarCuenta(cuenta, familiaId: familiaId)
+                await cargarCuentasFamiliares() // Recargar para obtener la versión actualizada
+            } catch {
+                await MainActor.run {
+                    self.error = "Error al actualizar cuenta: \(error.localizedDescription)"
+                    self.isLoading = false
+                }
+            }
+        }
+    }
+    
+    func eliminarCuenta(_ cuentaId: String) {
+        guard let familiaId = familiaId else { return }
+        
+        isLoading = true
+        error = nil
+        
+        Task {
+            do {
+                try await firebaseService.eliminarCuenta(cuentaId: cuentaId, familiaId: familiaId)
+                await cargarCuentasFamiliares() // Recargar para obtener la versión actualizada
+            } catch {
+                await MainActor.run {
+                    self.error = "Error al eliminar cuenta: \(error.localizedDescription)"
+                    self.isLoading = false
+                }
+            }
+        }
+    }
+    
+    func marcarComoPagada(_ cuentaId: String) {
+        guard let familiaId = familiaId,
+              let cuentaIndex = cuentas.firstIndex(where: { $0.id == cuentaId }) else { return }
+        
+        var cuenta = cuentas[cuentaIndex]
+        cuenta.fechaPago = Date()
+        
+        actualizarCuenta(cuenta)
     }
     
     // MARK: - Computed Properties para Dashboard
@@ -358,19 +376,6 @@ class CuentasViewModel: ObservableObject {
         return Cuenta.CategoriasCuentas.allCases.map { $0.rawValue }
     }
     
-    // MARK: - Operaciones CRUD
-    func agregarCuenta(_ cuenta: Cuenta) {
-        cuentas.append(cuenta)
-        // Aquí se implementaría la persistencia real
-    }
-    
-    func actualizarCuenta(_ cuenta: Cuenta) {
-        if let index = cuentas.firstIndex(where: { $0.id == cuenta.id }) {
-            cuentas[index] = cuenta
-            // Aquí se implementaría la persistencia real
-        }
-    }
-    
     func eliminarCuenta(id: String) {
         cuentas.removeAll { $0.id == id }
         // Aquí se implementaría la persistencia real
@@ -420,27 +425,6 @@ class CuentasViewModel: ObservableObject {
     
     func eliminarCuenta(_ cuenta: Cuenta) {
         cuentas.removeAll { $0.id == cuenta.id }
-    }
-    
-    func actualizarCuenta(
-        _ cuenta: Cuenta,
-        monto: Double,
-        proveedor: String,
-        fechaVencimiento: Date,
-        categoria: String,
-        descripcion: String,
-        nombre: String,
-        fechaEmision: Date?
-    ) {
-        if let index = cuentas.firstIndex(where: { $0.id == cuenta.id }) {
-            cuentas[index].monto = monto
-            cuentas[index].proveedor = proveedor
-            cuentas[index].fechaVencimiento = fechaVencimiento
-            cuentas[index].categoria = categoria
-            cuentas[index].descripcion = descripcion
-            cuentas[index].nombre = nombre
-            cuentas[index].fechaEmision = fechaEmision
-        }
     }
     
     // MARK: - Organización Temporal

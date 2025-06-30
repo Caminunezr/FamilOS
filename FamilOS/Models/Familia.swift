@@ -29,8 +29,9 @@ struct MiembroFamilia: Identifiable, Codable {
     var fechaUnion: Date
     var activo: Bool
     var avatar: String? // URL o emoji
+    var familiaId: String? // ID de la familia a la que pertenece
     
-    init(id: String, nombre: String, email: String, rol: RolFamiliar = .miembro) {
+    init(id: String, nombre: String, email: String, rol: RolFamiliar = .miembro, familiaId: String? = nil) {
         self.id = id
         self.nombre = nombre
         self.email = email
@@ -38,6 +39,7 @@ struct MiembroFamilia: Identifiable, Codable {
         self.fechaUnion = Date()
         self.activo = true
         self.avatar = nil
+        self.familiaId = familiaId
     }
 }
 
@@ -125,6 +127,13 @@ struct InvitacionFamiliar: Identifiable, Codable {
     var fechaExpiracion: Date
     var estado: EstadoInvitacion
     var codigoInvitacion: String
+    var fechaRespuesta: Date? // Fecha cuando se respondió la invitación
+    var respondidoPor: String? // Usuario que respondió (útil para tracking)
+    
+    // Propiedad computada para compatibilidad
+    var codigo: String {
+        return codigoInvitacion
+    }
     
     init(familiaId: String, familiaName: String, invitadoPor: String, invitadoEmail: String) {
         self.familiaId = familiaId
@@ -135,6 +144,8 @@ struct InvitacionFamiliar: Identifiable, Codable {
         self.fechaExpiracion = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
         self.estado = .pendiente
         self.codigoInvitacion = Self.generarCodigoInvitacion()
+        self.fechaRespuesta = nil
+        self.respondidoPor = nil
     }
     
     private static func generarCodigoInvitacion() -> String {

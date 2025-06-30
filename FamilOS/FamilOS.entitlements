@@ -4,15 +4,44 @@
 <dict>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
+	
+	<!-- Network permissions for Firebase -->
 	<key>com.apple.security.network.client</key>
 	<true/>
 	<key>com.apple.security.network.server</key>
 	<true/>
+	
+	<!-- File access permissions -->
 	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
-	<key>keychain-access-groups</key>
+	<key>com.apple.security.files.downloads.read-write</key>
+	<true/>
+	
+	<!-- Keychain access for Firebase Auth -->
+	<key>com.apple.security.keychain-access-groups</key>
 	<array>
 		<string>$(AppIdentifierPrefix)CamNR.FamilOS</string>
+	</array>
+	
+	<!-- Application groups for data sharing -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.CamNR.FamilOS</string>
+	</array>
+	
+	<!-- Additional permissions for Firebase -->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+	
+	<!-- Temporary exception for development -->
+	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+	<array>
+		<string>com.apple.securityd</string>
+		<string>com.apple.SystemConfiguration.configd</string>
 	</array>
 </dict>
 </plist>

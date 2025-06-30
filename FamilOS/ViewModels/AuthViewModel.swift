@@ -8,13 +8,17 @@ import Network
 
 class AuthViewModel: ObservableObject {
     @Published var usuarioActual: Usuario?
+    @Published var familiaActual: Familia?
+    @Published var miembroFamiliar: MiembroFamilia?
     @Published var isAuthenticated: Bool = false
     @Published var isAuthenticating: Bool = false
     @Published var error: String?
     @Published var mostrarRegistro: Bool = false
+    @Published var mostrarCreacionFamilia: Bool = false
+    @Published var mostrarUnirseFamilia: Bool = false
     @Published var networkStatus: NWPath.Status = .satisfied
     
-    private var databaseRef = Database.database().reference()
+    private let firebaseService = FirebaseService()
     private let networkMonitor = NWPathMonitor()
     private let networkQueue = DispatchQueue(label: "NetworkMonitor")
     
@@ -62,46 +66,80 @@ class AuthViewModel: ObservableObject {
     
     // Cargar datos del usuario desde Firebase Database
     private func cargarDatosUsuario(uid: String) {
-        databaseRef.child("usuarios").child(uid).observeSingleEvent(of: .value) { [weak self] snapshot, _ in
-            DispatchQueue.main.async {
-                if let datos = snapshot.value as? [String: Any],
-                   let nombre = datos["nombre"] as? String,
-                   let email = datos["email"] as? String {
+        Task {
+            do {
+                // Cargar usuario
+                if let usuario = try await firebaseService.obtenerUsuario(uid: uid) {
+                    await MainActor.run {
+                        self.usuarioActual = usuario
+                    }
                     
-                    let esPrincipal = datos["esPrincipal"] as? Bool ?? false
+                    // Cargar información familiar
+                    try await cargarDatosFamiliares(usuarioId: uid)
                     
-                    self?.usuarioActual = Usuario(
-                        id: uid,
-                        nombre: nombre,
-                        email: email,
-                        contrasena: "", // No almacenamos la contraseña
-                        esPrincipal: esPrincipal
-                    )
-                    self?.isAuthenticated = true
+                    await MainActor.run {
+                        self.isAuthenticated = true
+                    }
                 } else {
                     // Si no hay datos en la DB, crear perfil básico
-                    self?.crearPerfilUsuario(uid: uid)
+                    await crearPerfilUsuario(uid: uid)
+                }
+            } catch {
+                await MainActor.run {
+                    self.error = "Error al cargar datos del usuario: \(error.localizedDescription)"
                 }
             }
         }
     }
     
+    // Cargar datos familiares del usuario
+    private func cargarDatosFamiliares(usuarioId: String) async throws {
+        // Solo intentar cargar datos familiares si el usuario existe en la DB
+        guard usuarioActual != nil else { return }
+        
+        do {
+            // Usar método optimizado para obtener familia del usuario
+            let (familia, miembro) = try await firebaseService.obtenerFamiliaDelUsuario(usuarioId: usuarioId)
+            
+            await MainActor.run {
+                self.familiaActual = familia
+                self.miembroFamiliar = miembro
+                
+                if familia == nil {
+                    print("ℹ️ Usuario sin familia asignada")
+                }
+            }
+        } catch {
+            // Si hay error de permisos, significa que el usuario no tiene familia asignada
+            print("Info: Usuario sin familia asignada - \(error.localizedDescription)")
+            await MainActor.run {
+                self.familiaActual = nil
+                self.miembroFamiliar = nil
+            }
+        }
+    }
+    
     // Crear perfil de usuario en Firebase Database
-    private func crearPerfilUsuario(uid: String) {
+    private func crearPerfilUsuario(uid: String) async {
         guard let firebaseUser = Auth.auth().currentUser else { return }
         
-        let datosUsuario: [String: Any] = [
-            "nombre": firebaseUser.displayName ?? "Usuario",
-            "email": firebaseUser.email ?? "",
-            "esPrincipal": true, // El primer usuario siempre es principal
-            "fechaCreacion": ServerValue.timestamp()
-        ]
+        let usuario = Usuario(
+            id: uid,
+            nombre: firebaseUser.displayName ?? "Usuario",
+            email: firebaseUser.email ?? "",
+            contrasena: "",
+            esPrincipal: true
+        )
         
-        databaseRef.child("usuarios").child(uid).setValue(datosUsuario) { [weak self] error, _ in
-            DispatchQueue.main.async {
-                if error == nil {
-                    self?.cargarDatosUsuario(uid: uid)
-                }
+        do {
+            try await firebaseService.crearUsuario(usuario)
+            await MainActor.run {
+                self.usuarioActual = usuario
+                self.mostrarCreacionFamilia = true
+            }
+        } catch {
+            await MainActor.run {
+                self.error = "Error al crear perfil: \(error.localizedDescription)"
             }
         }
     }
@@ -165,7 +203,13 @@ class AuthViewModel: ObservableObject {
     func logout() {
         do {
             try Auth.auth().signOut()
-            // El listener de Auth se encargará de actualizar el estado
+            usuarioActual = nil
+            familiaActual = nil
+            miembroFamiliar = nil
+            isAuthenticated = false
+            mostrarCreacionFamilia = false
+            mostrarUnirseFamilia = false
+            error = nil
         } catch {
             self.error = "Error al cerrar sesión: \(error.localizedDescription)"
         }
@@ -199,19 +243,54 @@ class AuthViewModel: ObservableObject {
     
     // Crear perfil de usuario durante el registro
     private func crearPerfilUsuarioRegistro(uid: String, nombre: String, email: String) {
-        let datosUsuario: [String: Any] = [
-            "nombre": nombre,
-            "email": email,
-            "esPrincipal": true, // Por defecto es principal
-            "fechaCreacion": ServerValue.timestamp()
-        ]
+        let usuario = Usuario(
+            id: uid,
+            nombre: nombre,
+            email: email,
+            contrasena: "", // No almacenamos la contraseña en la base de datos
+            fechaCreacion: Date()
+        )
         
-        databaseRef.child("usuarios").child(uid).setValue(datosUsuario) { [weak self] error, _ in
-            DispatchQueue.main.async {
-                self?.isAuthenticating = false
-                if let error = error {
-                    self?.error = "Error al crear perfil: \(error.localizedDescription)"
+        let firebaseService = FirebaseService()
+        Task {
+            do {
+                // 1. Crear usuario en Firebase Database
+                try await firebaseService.crearUsuario(usuario)
+                
+                // 2. Crear una familia automáticamente para el nuevo usuario
+                let nuevaFamilia = Familia(
+                    nombre: "Familia de \(nombre)",
+                    descripcion: "Familia creada automáticamente",
+                    adminId: uid
+                )
+                
+                // 3. Crear la familia en Firebase
+                try await firebaseService.crearFamilia(nuevaFamilia)
+                
+                // 4. Agregar al usuario como administrador de la familia
+                let miembro = MiembroFamilia(
+                    id: uid,
+                    nombre: nombre,
+                    email: email,
+                    rol: .admin,
+                    familiaId: nuevaFamilia.id
+                )
+                
+                try await firebaseService.agregarMiembroFamilia(familiaId: nuevaFamilia.id, miembro: miembro)
+                
+                await MainActor.run {
+                    self.isAuthenticating = false
+                    // El listener de Auth se encargará de cargar los datos
                 }
+                
+                print("✅ Usuario registrado y familia creada exitosamente")
+                
+            } catch {
+                await MainActor.run {
+                    self.isAuthenticating = false
+                    self.error = "Error al crear perfil: \(error.localizedDescription)"
+                }
+                print("❌ Error en registro: \(error)")
             }
         }
     }
@@ -490,6 +569,109 @@ class AuthViewModel: ObservableObject {
                 } else {
                     print("✅ Conexión a Firebase exitosa")
                     self.error = "✅ Conexión a Firebase exitosa"
+                }
+            }
+        }
+    }
+    
+    // MARK: - Gestión de Familias
+    
+    // Crear una nueva familia
+    func crearFamilia(nombre: String, descripcion: String = "") {
+        guard let usuario = usuarioActual else { return }
+        
+        isAuthenticating = true
+        error = nil
+        
+        Task {
+            do {
+                let familia = Familia(
+                    nombre: nombre,
+                    descripcion: descripcion,
+                    adminId: usuario.id
+                )
+                
+                // Crear familia en Firebase
+                try await firebaseService.crearFamilia(familia)
+                
+                // Agregar al usuario como miembro administrador
+                let miembro = MiembroFamilia(
+                    id: usuario.id,
+                    nombre: usuario.nombre,
+                    email: usuario.email,
+                    rol: .admin
+                )
+                
+                try await firebaseService.agregarMiembroFamilia(familiaId: familia.id, miembro: miembro)
+                
+                await MainActor.run {
+                    self.familiaActual = familia
+                    self.miembroFamiliar = miembro
+                    self.mostrarCreacionFamilia = false
+                    self.isAuthenticating = false
+                }
+                
+            } catch {
+                await MainActor.run {
+                    self.error = "Error al crear familia: \(error.localizedDescription)"
+                    self.isAuthenticating = false
+                }
+            }
+        }
+    }
+    
+    // Unirse a una familia existente usando código de invitación
+    func unirseFamilia(codigoInvitacion: String) {
+        guard let usuario = usuarioActual else { return }
+        
+        isAuthenticating = true
+        error = nil
+        
+        Task {
+            do {
+                // Buscar invitación por código
+                if let invitacion = try await firebaseService.buscarInvitacionPorCodigo(codigoInvitacion),
+                   invitacion.estado == .pendiente,
+                   invitacion.fechaExpiracion > Date() {
+                    
+                    // Crear membresía del usuario
+                    let miembro = MiembroFamilia(
+                        id: usuario.id,
+                        nombre: usuario.nombre,
+                        email: usuario.email,
+                        rol: .miembro
+                    )
+                    
+                    try await firebaseService.agregarMiembroFamilia(familiaId: invitacion.familiaId, miembro: miembro)
+                    
+                    // Marcar invitación como aceptada
+                    var invitacionActualizada = invitacion
+                    invitacionActualizada.estado = .aceptada
+                    invitacionActualizada.fechaRespuesta = Date()
+                    invitacionActualizada.respondidoPor = usuario.id
+                    try await firebaseService.actualizarInvitacion(invitacionActualizada)
+                    
+                    // Cargar datos de la familia
+                    let familia = try await firebaseService.obtenerFamilia(familiaId: invitacion.familiaId)
+                    
+                    await MainActor.run {
+                        self.familiaActual = familia
+                        self.miembroFamiliar = miembro
+                        self.mostrarUnirseFamilia = false
+                        self.isAuthenticating = false
+                    }
+                    
+                } else {
+                    await MainActor.run {
+                        self.error = "Código de invitación inválido o expirado"
+                        self.isAuthenticating = false
+                    }
+                }
+                
+            } catch {
+                await MainActor.run {
+                    self.error = "Error al unirse a la familia: \(error.localizedDescription)"
+                    self.isAuthenticating = false
                 }
             }
         }

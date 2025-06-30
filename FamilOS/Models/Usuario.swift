@@ -8,6 +8,7 @@ struct Usuario: Identifiable, Codable, Equatable {
     var imagenPerfil: URL?
     var esPrincipal: Bool = false
     var fechaCreacion: Date = Date()
+    var familiaId: String? // ID de la familia a la que pertenece
     
     // Información adicional opcional
     var telefono: String?

@@ -120,27 +120,56 @@ class PresupuestoViewModel: ObservableObject {
     @Published var deudas: [DeudaPresupuesto] = []
     @Published var mesSeleccionado: Date = Date()
     @Published var mostrarMesesAnteriores: Bool = false
+    @Published var isLoading: Bool = false
+    @Published var error: String?
     
     // MARK: - Nuevas propiedades para integración con cuentas
     @Published var presupuestosPorCategoria: [String: Double] = [:]
     private var cuentasViewModel: CuentasViewModel?
+    private let firebaseService = FirebaseService()
+    private var familiaId: String?
     
-    // MARK: - Configuración de integración
-    func configurarIntegracionCuentas(_ cuentasVM: CuentasViewModel) {
-        self.cuentasViewModel = cuentasVM
-        cargarPresupuestosPorCategoriaEjemplo()
+    // MARK: - Configuración
+    
+    func configurarFamilia(_ familiaId: String) {
+        self.familiaId = familiaId
+        cargarDatosFamiliares()
     }
     
-    private func cargarPresupuestosPorCategoriaEjemplo() {
-        // Usar las nuevas categorías predefinidas
-        presupuestosPorCategoria = [
-            CategoriaFinanciera.luz.rawValue: 1200.0,
-            CategoriaFinanciera.agua.rawValue: 400.0,
-            CategoriaFinanciera.gas.rawValue: 500.0,
-            CategoriaFinanciera.internet.rawValue: 600.0,
-            CategoriaFinanciera.mascotas.rawValue: 300.0,
-            CategoriaFinanciera.hogar.rawValue: 2000.0
-        ]
+    // MARK: - Configuración de integración con cuentas
+    func configurarIntegracionCuentas(_ cuentasVM: CuentasViewModel) {
+        self.cuentasViewModel = cuentasVM
+    }
+    
+    // MARK: - Carga de datos familiares
+    
+    func cargarDatosFamiliares() {
+        guard let familiaId = familiaId else { return }
+        
+        isLoading = true
+        error = nil
+        
+        Task {
+            do {
+                async let presupuestoTask = firebaseService.obtenerPresupuestosFamilia(familiaId: familiaId)
+                async let aportesTask = firebaseService.obtenerAportesFamilia(familiaId: familiaId)
+                async let deudasTask = firebaseService.obtenerDeudasFamilia(familiaId: familiaId)
+                
+                let (presupuestosCargados, aportesCargados, deudasCargadas) = try await (presupuestoTask, aportesTask, deudasTask)
+                
+                await MainActor.run {
+                    self.presupuestos = presupuestosCargados
+                    self.aportes = aportesCargados
+                    self.deudas = deudasCargadas
+                    self.isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.error = "Error al cargar datos de presupuesto: \(error.localizedDescription)"
+                    self.isLoading = false
+                }
+            }
+        }
     }
 
     // Propiedades calculadas
@@ -173,88 +202,101 @@ class PresupuestoViewModel: ObservableObject {
         return totalAportes - totalDeudasMensuales + (presupuestoActual?.sobranteTransferido ?? 0)
     }
     
-    // MARK: - Métodos de carga de datos
+    // MARK: - Gestión de presupuestos
     
-    func cargarDatosEjemplo() {
-        let calendar = Calendar.current
-        let hoy = Date()
+    func crearPresupuestoMensual(_ presupuesto: PresupuestoMensual) {
+        guard let familiaId = familiaId else { return }
         
-        // Crear presupuestos para los últimos 3 meses
-        for i in 0...2 {
-            if let fecha = calendar.date(byAdding: .month, value: -i, to: hoy) {
-                let presupuesto = PresupuestoMensual(
-                    fechaMes: fecha,
-                    creador: "Usuario",
-                    cerrado: i > 0,  // Solo el mes actual está abierto
-                    sobranteTransferido: i == 0 ? 1500.0 : 0.0  // El mes actual tiene un sobrante transferido
-                )
-                presupuestos.append(presupuesto)
-                
-                // Agregar aportes para este presupuesto
-                let aporte1 = Aporte(
-                    presupuestoId: presupuesto.id,
-                    usuario: "Usuario Principal",
-                    monto: 15000.0,
-                    comentario: "Sueldo mensual"
-                )
-                
-                let aporte2 = Aporte(
-                    presupuestoId: presupuesto.id,
-                    usuario: "Usuario Secundario",
-                    monto: 8000.0,
-                    comentario: "Aporte familiar"
-                )
-                
-                aportes.append(contentsOf: [aporte1, aporte2])
-                
-                // Agregar deudas para el presupuesto actual
-                if i == 0 {
-                    let deuda1 = DeudaPresupuesto(
-                        presupuestoId: presupuesto.id,
-                        categoria: "Préstamo Hipotecario",
-                        montoTotal: 120000.0,
-                        cuotasTotales: 12,
-                        tasaInteres: 5.5,
-                        fechaInicio: fecha,
-                        descripcion: "Préstamo para renovación de cocina"
-                    )
-                    
-                    let deuda2 = DeudaPresupuesto(
-                        presupuestoId: presupuesto.id,
-                        categoria: "Servicios",
-                        montoTotal: 5000.0,
-                        cuotasTotales: 1,
-                        tasaInteres: 0.0,
-                        fechaInicio: fecha,
-                        descripcion: "Gastos fijos mensuales"
-                    )
-                    
-                    deudas.append(contentsOf: [deuda1, deuda2])
+        isLoading = true
+        error = nil
+        
+        Task {
+            do {
+                try await firebaseService.crearPresupuesto(presupuesto, familiaId: familiaId)
+                await cargarDatosFamiliares()
+            } catch {
+                await MainActor.run {
+                    self.error = "Error al crear presupuesto: \(error.localizedDescription)"
+                    self.isLoading = false
                 }
             }
         }
     }
     
-    // MARK: - Métodos de gestión
-    
     func agregarAporte(_ aporte: Aporte) {
-        aportes.append(aporte)
-        objectWillChange.send()
+        guard let familiaId = familiaId else { return }
+        
+        isLoading = true
+        error = nil
+        
+        Task {
+            do {
+                try await firebaseService.crearAporte(aporte, familiaId: familiaId)
+                await cargarDatosFamiliares()
+            } catch {
+                await MainActor.run {
+                    self.error = "Error al agregar aporte: \(error.localizedDescription)"
+                    self.isLoading = false
+                }
+            }
+        }
     }
     
     func agregarDeuda(_ deuda: DeudaPresupuesto) {
-        deudas.append(deuda)
-        objectWillChange.send()
+        guard let familiaId = familiaId else { return }
+        
+        isLoading = true
+        error = nil
+        
+        Task {
+            do {
+                try await firebaseService.crearDeuda(deuda, familiaId: familiaId)
+                await cargarDatosFamiliares()
+            } catch {
+                await MainActor.run {
+                    self.error = "Error al agregar deuda: \(error.localizedDescription)"
+                    self.isLoading = false
+                }
+            }
+        }
     }
     
     func eliminarAporte(id: String) {
-        aportes.removeAll(where: { $0.id == id })
-        objectWillChange.send()
+        guard let familiaId = familiaId else { return }
+        
+        isLoading = true
+        error = nil
+        
+        Task {
+            do {
+                try await firebaseService.eliminarAporte(aporteId: id, familiaId: familiaId)
+                await cargarDatosFamiliares()
+            } catch {
+                await MainActor.run {
+                    self.error = "Error al eliminar aporte: \(error.localizedDescription)"
+                    self.isLoading = false
+                }
+            }
+        }
     }
     
     func eliminarDeuda(id: String) {
-        deudas.removeAll(where: { $0.id == id })
-        objectWillChange.send()
+        guard let familiaId = familiaId else { return }
+        
+        isLoading = true
+        error = nil
+        
+        Task {
+            do {
+                try await firebaseService.eliminarDeuda(deudaId: id, familiaId: familiaId)
+                await cargarDatosFamiliares()
+            } catch {
+                await MainActor.run {
+                    self.error = "Error al eliminar deuda: \(error.localizedDescription)"
+                    self.isLoading = false
+                }
+            }
+        }
     }
     
     func transferirSobrante() {

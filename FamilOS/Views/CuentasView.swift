@@ -1839,7 +1839,7 @@ struct EditarCuentaView: View {
                     .padding(.vertical, 24)
                 }
                 .navigationTitle("")
-                .toolbar {
+                .toolbar(content: {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancelar") {
                             dismiss()
@@ -1849,25 +1849,22 @@ struct EditarCuentaView: View {
                     
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Guardar") {
-                            viewModel.actualizarCuenta(
-                                cuenta,
-                                monto: monto,
-                                proveedor: proveedor,
-                                fechaVencimiento: fechaVencimiento,
-                                categoria: categoria,
-                                descripcion: descripcion,
-                                nombre: nombre,
-                                fechaEmision: usarFechaEmision ? fechaEmision : nil
-                            )
+                            var cuentaActualizada = cuenta
+                            cuentaActualizada.monto = monto
+                            cuentaActualizada.proveedor = proveedor
+                            cuentaActualizada.fechaVencimiento = fechaVencimiento
+                            cuentaActualizada.categoria = categoria
+                            cuentaActualizada.descripcion = descripcion
+                            cuentaActualizada.nombre = nombre
+                            cuentaActualizada.fechaEmision = usarFechaEmision ? fechaEmision : nil
+                            
+                            viewModel.actualizarCuenta(cuentaActualizada)
                             dismiss()
                         }
                         .disabled(proveedor.isEmpty || monto <= 0 || categoria.isEmpty)
                         .buttonStyle(GlassButtonStyle(isDisabled: proveedor.isEmpty || monto <= 0 || categoria.isEmpty))
                     }
-                }
-                .onAppear {
-                    viewModel.cargarDatosEjemplo()
-                }
+                })
             }
         }
     }

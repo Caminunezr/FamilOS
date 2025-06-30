@@ -19,419 +19,494 @@ class FirebaseService: ObservableObject {
     
     // MARK: - Usuario Methods
     
-    func guardarUsuario(_ usuario: Usuario, completion: @escaping (Result<Void, Error>) -> Void) {
-        do {
-            let userData = try JSONEncoder().encode(usuario)
-            let userDict = try JSONSerialization.jsonObject(with: userData) as? [String: Any] ?? [:]
-            
-            database.child("usuarios").child(usuario.id).setValue(userDict) { error, _ in
-                if let error = error {
-                    completion(.failure(error))
-                } else {
-                    completion(.success(()))
+    func crearUsuario(_ usuario: Usuario) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            do {
+                let userData = try JSONEncoder().encode(usuario)
+                let userDict = try JSONSerialization.jsonObject(with: userData) as? [String: Any] ?? [:]
+                
+                database.child("usuarios").child(usuario.id).setValue(userDict) { error, _ in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: ())
+                    }
                 }
+            } catch {
+                continuation.resume(throwing: error)
             }
-        } catch {
-            completion(.failure(error))
         }
     }
     
-    func cargarUsuario(userId: String, completion: @escaping (Result<Usuario, Error>) -> Void) {
-        database.child("usuarios").child(userId).observeSingleEvent(of: .value) { snapshot in
-            guard let data = snapshot.value as? [String: Any] else {
-                completion(.failure(NSError(domain: "FirebaseService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Usuario no encontrado"])))
-                return
-            }
-            
-            do {
-                let jsonData = try JSONSerialization.data(withJSONObject: data)
-                let usuario = try JSONDecoder().decode(Usuario.self, from: jsonData)
-                completion(.success(usuario))
-            } catch {
-                completion(.failure(error))
+    func obtenerUsuario(uid: String) async throws -> Usuario? {
+        return try await withCheckedThrowingContinuation { continuation in
+            database.child("usuarios").child(uid).observeSingleEvent(of: .value) { snapshot in
+                guard let data = snapshot.value as? [String: Any] else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                
+                do {
+                    let jsonData = try JSONSerialization.data(withJSONObject: data)
+                    let usuario = try JSONDecoder().decode(Usuario.self, from: jsonData)
+                    continuation.resume(returning: usuario)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
             }
         }
     }
     
     // MARK: - Familia Methods
     
-    func crearFamilia(_ familia: Familia, completion: @escaping (Result<Familia, Error>) -> Void) {
-        do {
-            let familiaData = try JSONEncoder().encode(familia)
-            let familiaDict = try JSONSerialization.jsonObject(with: familiaData) as? [String: Any] ?? [:]
-            
-            database.child("familias").child(familia.id).setValue(familiaDict) { error, _ in
-                if let error = error {
-                    completion(.failure(error))
-                } else {
-                    completion(.success(familia))
+    func crearFamilia(_ familia: Familia) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            do {
+                let familiaData = try JSONEncoder().encode(familia)
+                let familiaDict = try JSONSerialization.jsonObject(with: familiaData) as? [String: Any] ?? [:]
+                
+                database.child("familias").child(familia.id).setValue(familiaDict) { error, _ in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: ())
+                    }
+                }
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+    
+    func obtenerFamilia(familiaId: String) async throws -> Familia {
+        return try await withCheckedThrowingContinuation { continuation in
+            database.child("familias").child(familiaId).observeSingleEvent(of: .value) { snapshot in
+                guard let data = snapshot.value as? [String: Any] else {
+                    continuation.resume(throwing: NSError(domain: "FirebaseService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Familia no encontrada"]))
+                    return
+                }
+                
+                do {
+                    let jsonData = try JSONSerialization.data(withJSONObject: data)
+                    let familia = try JSONDecoder().decode(Familia.self, from: jsonData)
+                    continuation.resume(returning: familia)
+                } catch {
+                    continuation.resume(throwing: error)
                 }
             }
-        } catch {
-            completion(.failure(error))
         }
     }
     
-    func cargarFamilia(familiaId: String, completion: @escaping (Result<Familia, Error>) -> Void) {
-        database.child("familias").child(familiaId).observeSingleEvent(of: .value) { snapshot in
-            guard let data = snapshot.value as? [String: Any] else {
-                completion(.failure(NSError(domain: "FirebaseService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Familia no encontrada"])))
-                return
-            }
-            
-            do {
-                let jsonData = try JSONSerialization.data(withJSONObject: data)
-                let familia = try JSONDecoder().decode(Familia.self, from: jsonData)
-                completion(.success(familia))
-            } catch {
-                completion(.failure(error))
-            }
-        }
-    }
-    
-    func observarFamilia(familiaId: String, completion: @escaping (Result<Familia, Error>) -> Void) {
-        let handle = database.child("familias").child(familiaId).observe(.value) { snapshot in
-            guard let data = snapshot.value as? [String: Any] else {
-                completion(.failure(NSError(domain: "FirebaseService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Familia no encontrada"])))
-                return
-            }
-            
-            do {
-                let jsonData = try JSONSerialization.data(withJSONObject: data)
-                let familia = try JSONDecoder().decode(Familia.self, from: jsonData)
-                completion(.success(familia))
-            } catch {
-                completion(.failure(error))
-            }
-        }
-        listeners.append(handle)
-    }
-    
-    func agregarMiembroAFamilia(familiaId: String, miembro: MiembroFamilia, completion: @escaping (Result<Void, Error>) -> Void) {
-        do {
-            let miembroData = try JSONEncoder().encode(miembro)
-            let miembroDict = try JSONSerialization.jsonObject(with: miembroData) as? [String: Any] ?? [:]
-            
-            database.child("familias").child(familiaId).child("miembros").child(miembro.id).setValue(miembroDict) { error, _ in
-                if let error = error {
-                    completion(.failure(error))
-                } else {
-                    // También actualizar el usuario con la familiaId
-                    self.database.child("usuarios").child(miembro.id).child("familiaId").setValue(familiaId)
-                    completion(.success(()))
+    func obtenerMembresiasUsuario(usuarioId: String) async throws -> [MiembroFamilia] {
+        return try await withCheckedThrowingContinuation { continuation in
+            database.child("familias").observeSingleEvent(of: .value) { snapshot in
+                guard let familias = snapshot.value as? [String: Any] else {
+                    continuation.resume(returning: [])
+                    return
                 }
+                
+                var membresias: [MiembroFamilia] = []
+                
+                for (familiaId, familiaData) in familias {
+                    if let familiaDict = familiaData as? [String: Any],
+                       let miembros = familiaDict["miembros"] as? [String: Any],
+                       let miembroData = miembros[usuarioId] as? [String: Any] {
+                        
+                        do {
+                            let jsonData = try JSONSerialization.data(withJSONObject: miembroData)
+                            var miembro = try JSONDecoder().decode(MiembroFamilia.self, from: jsonData)
+                            // Asegurarnos de que el miembro tenga el familiaId correcto
+                            miembro.familiaId = familiaId
+                            membresias.append(miembro)
+                        } catch {
+                            print("Error decodificando miembro: \(error)")
+                        }
+                    }
+                }
+                
+                continuation.resume(returning: membresias)
+            } withCancel: { error in
+                continuation.resume(throwing: error)
             }
-        } catch {
-            completion(.failure(error))
+        }
+    }
+    
+    func agregarMiembroFamilia(familiaId: String, miembro: MiembroFamilia) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            do {
+                let miembroData = try JSONEncoder().encode(miembro)
+                let miembroDict = try JSONSerialization.jsonObject(with: miembroData) as? [String: Any] ?? [:]
+                
+                database.child("familias").child(familiaId).child("miembros").child(miembro.id).setValue(miembroDict) { error, _ in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        // También actualizar el usuario con la familiaId
+                        self.database.child("usuarios").child(miembro.id).child("familiaId").setValue(familiaId)
+                        continuation.resume(returning: ())
+                    }
+                }
+            } catch {
+                continuation.resume(throwing: error)
+            }
         }
     }
     
     // MARK: - Cuentas Familiares
     
-    func cargarCuentasFamiliares(familiaId: String, completion: @escaping (Result<[Cuenta], Error>) -> Void) {
-        database.child("familias").child(familiaId).child("cuentas").observeSingleEvent(of: .value) { snapshot in
-            guard let data = snapshot.value as? [String: Any] else {
-                completion(.success([])) // No hay cuentas aún
-                return
-            }
-            
-            var cuentas: [Cuenta] = []
-            for (_, cuentaData) in data {
-                do {
-                    let jsonData = try JSONSerialization.data(withJSONObject: cuentaData)
-                    let cuenta = try JSONDecoder().decode(Cuenta.self, from: jsonData)
-                    cuentas.append(cuenta)
-                } catch {
-                    print("Error decodificando cuenta: \(error)")
+    func obtenerCuentasFamilia(familiaId: String) async throws -> [Cuenta] {
+        return try await withCheckedThrowingContinuation { continuation in
+            database.child("familias").child(familiaId).child("cuentas").observeSingleEvent(of: .value) { snapshot in
+                guard let data = snapshot.value as? [String: Any] else {
+                    continuation.resume(returning: [])
+                    return
                 }
+                
+                var cuentas: [Cuenta] = []
+                for (_, cuentaData) in data {
+                    do {
+                        let jsonData = try JSONSerialization.data(withJSONObject: cuentaData)
+                        let cuenta = try JSONDecoder().decode(Cuenta.self, from: jsonData)
+                        cuentas.append(cuenta)
+                    } catch {
+                        print("Error decodificando cuenta: \(error)")
+                    }
+                }
+                continuation.resume(returning: cuentas)
             }
-            completion(.success(cuentas))
         }
     }
     
-    func observarCuentasFamiliares(familiaId: String, completion: @escaping (Result<[Cuenta], Error>) -> Void) {
-        let handle = database.child("familias").child(familiaId).child("cuentas").observe(.value) { snapshot in
-            guard let data = snapshot.value as? [String: Any] else {
-                completion(.success([])) // No hay cuentas aún
-                return
-            }
-            
-            var cuentas: [Cuenta] = []
-            for (_, cuentaData) in data {
-                do {
-                    let jsonData = try JSONSerialization.data(withJSONObject: cuentaData)
-                    let cuenta = try JSONDecoder().decode(Cuenta.self, from: jsonData)
-                    cuentas.append(cuenta)
-                } catch {
-                    print("Error decodificando cuenta: \(error)")
+    func crearCuenta(_ cuenta: Cuenta, familiaId: String) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            do {
+                let cuentaData = try JSONEncoder().encode(cuenta)
+                let cuentaDict = try JSONSerialization.jsonObject(with: cuentaData) as? [String: Any] ?? [:]
+                
+                database.child("familias").child(familiaId).child("cuentas").child(cuenta.id).setValue(cuentaDict) { error, _ in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: ())
+                    }
                 }
+            } catch {
+                continuation.resume(throwing: error)
             }
-            completion(.success(cuentas))
         }
-        listeners.append(handle)
     }
     
-    func guardarCuentaFamiliar(familiaId: String, cuenta: Cuenta, completion: @escaping (Result<Void, Error>) -> Void) {
-        do {
-            let cuentaData = try JSONEncoder().encode(cuenta)
-            let cuentaDict = try JSONSerialization.jsonObject(with: cuentaData) as? [String: Any] ?? [:]
-            
-            database.child("familias").child(familiaId).child("cuentas").child(cuenta.id).setValue(cuentaDict) { error, _ in
+    func actualizarCuenta(_ cuenta: Cuenta, familiaId: String) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            do {
+                let cuentaData = try JSONEncoder().encode(cuenta)
+                let cuentaDict = try JSONSerialization.jsonObject(with: cuentaData) as? [String: Any] ?? [:]
+                
+                database.child("familias").child(familiaId).child("cuentas").child(cuenta.id).setValue(cuentaDict) { error, _ in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: ())
+                    }
+                }
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+    
+    func eliminarCuenta(cuentaId: String, familiaId: String) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            database.child("familias").child(familiaId).child("cuentas").child(cuentaId).removeValue { error, _ in
                 if let error = error {
-                    completion(.failure(error))
+                    continuation.resume(throwing: error)
                 } else {
-                    completion(.success(()))
+                    continuation.resume(returning: ())
                 }
-            }
-        } catch {
-            completion(.failure(error))
-        }
-    }
-    
-    func eliminarCuentaFamiliar(familiaId: String, cuentaId: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        database.child("familias").child(familiaId).child("cuentas").child(cuentaId).removeValue { error, _ in
-            if let error = error {
-                completion(.failure(error))
-            } else {
-                completion(.success(()))
             }
         }
     }
     
     // MARK: - Presupuestos Familiares
     
-    func cargarPresupuestosFamiliares(familiaId: String, completion: @escaping (Result<[Presupuesto], Error>) -> Void) {
-        database.child("familias").child(familiaId).child("presupuestos").observeSingleEvent(of: .value) { snapshot in
-            guard let data = snapshot.value as? [String: Any] else {
-                completion(.success([])) // No hay presupuestos aún
-                return
-            }
-            
-            var presupuestos: [Presupuesto] = []
-            for (_, presupuestoData) in data {
-                do {
-                    let jsonData = try JSONSerialization.data(withJSONObject: presupuestoData)
-                    let presupuesto = try JSONDecoder().decode(Presupuesto.self, from: jsonData)
-                    presupuestos.append(presupuesto)
-                } catch {
-                    print("Error decodificando presupuesto: \(error)")
+    func obtenerPresupuestosFamilia(familiaId: String) async throws -> [PresupuestoMensual] {
+        return try await withCheckedThrowingContinuation { continuation in
+            database.child("familias").child(familiaId).child("presupuestos").observeSingleEvent(of: .value) { snapshot in
+                guard let data = snapshot.value as? [String: Any] else {
+                    continuation.resume(returning: [])
+                    return
                 }
+                
+                var presupuestos: [PresupuestoMensual] = []
+                for (_, presupuestoData) in data {
+                    do {
+                        let jsonData = try JSONSerialization.data(withJSONObject: presupuestoData)
+                        let presupuesto = try JSONDecoder().decode(PresupuestoMensual.self, from: jsonData)
+                        presupuestos.append(presupuesto)
+                    } catch {
+                        print("Error decodificando presupuesto: \(error)")
+                    }
+                }
+                continuation.resume(returning: presupuestos)
             }
-            completion(.success(presupuestos))
         }
     }
     
-    func observarPresupuestosFamiliares(familiaId: String, completion: @escaping (Result<[Presupuesto], Error>) -> Void) {
-        let handle = database.child("familias").child(familiaId).child("presupuestos").observe(.value) { snapshot in
-            guard let data = snapshot.value as? [String: Any] else {
-                completion(.success([])) // No hay presupuestos aún
-                return
-            }
-            
-            var presupuestos: [Presupuesto] = []
-            for (_, presupuestoData) in data {
-                do {
-                    let jsonData = try JSONSerialization.data(withJSONObject: presupuestoData)
-                    let presupuesto = try JSONDecoder().decode(Presupuesto.self, from: jsonData)
-                    presupuestos.append(presupuesto)
-                } catch {
-                    print("Error decodificando presupuesto: \(error)")
+    func crearPresupuesto(_ presupuesto: PresupuestoMensual, familiaId: String) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            do {
+                let presupuestoData = try JSONEncoder().encode(presupuesto)
+                let presupuestoDict = try JSONSerialization.jsonObject(with: presupuestoData) as? [String: Any] ?? [:]
+                
+                database.child("familias").child(familiaId).child("presupuestos").child(presupuesto.id).setValue(presupuestoDict) { error, _ in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: ())
+                    }
                 }
+            } catch {
+                continuation.resume(throwing: error)
             }
-            completion(.success(presupuestos))
-        }
-        listeners.append(handle)
-    }
-    
-    func guardarPresupuestoFamiliar(familiaId: String, presupuesto: Presupuesto, completion: @escaping (Result<Void, Error>) -> Void) {
-        do {
-            let presupuestoData = try JSONEncoder().encode(presupuesto)
-            let presupuestoDict = try JSONSerialization.jsonObject(with: presupuestoData) as? [String: Any] ?? [:]
-            
-            database.child("familias").child(familiaId).child("presupuestos").child(presupuesto.id).setValue(presupuestoDict) { error, _ in
-                if let error = error {
-                    completion(.failure(error))
-                } else {
-                    completion(.success(()))
-                }
-            }
-        } catch {
-            completion(.failure(error))
         }
     }
     
     // MARK: - Aportes Familiares
     
-    func cargarAportesFamiliares(familiaId: String, completion: @escaping (Result<[Aporte], Error>) -> Void) {
-        database.child("familias").child(familiaId).child("aportes").observeSingleEvent(of: .value) { snapshot in
-            guard let data = snapshot.value as? [String: Any] else {
-                completion(.success([])) // No hay aportes aún
-                return
-            }
-            
-            var aportes: [Aporte] = []
-            for (_, aporteData) in data {
-                do {
-                    let jsonData = try JSONSerialization.data(withJSONObject: aporteData)
-                    let aporte = try JSONDecoder().decode(Aporte.self, from: jsonData)
-                    aportes.append(aporte)
-                } catch {
-                    print("Error decodificando aporte: \(error)")
+    func obtenerAportesFamilia(familiaId: String) async throws -> [Aporte] {
+        return try await withCheckedThrowingContinuation { continuation in
+            database.child("familias").child(familiaId).child("aportes").observeSingleEvent(of: .value) { snapshot in
+                guard let data = snapshot.value as? [String: Any] else {
+                    continuation.resume(returning: [])
+                    return
                 }
+                
+                var aportes: [Aporte] = []
+                for (_, aporteData) in data {
+                    do {
+                        let jsonData = try JSONSerialization.data(withJSONObject: aporteData)
+                        let aporte = try JSONDecoder().decode(Aporte.self, from: jsonData)
+                        aportes.append(aporte)
+                    } catch {
+                        print("Error decodificando aporte: \(error)")
+                    }
+                }
+                continuation.resume(returning: aportes)
             }
-            completion(.success(aportes))
         }
     }
     
-    func observarAportesFamiliares(familiaId: String, completion: @escaping (Result<[Aporte], Error>) -> Void) {
-        let handle = database.child("familias").child(familiaId).child("aportes").observe(.value) { snapshot in
-            guard let data = snapshot.value as? [String: Any] else {
-                completion(.success([])) // No hay aportes aún
-                return
-            }
-            
-            var aportes: [Aporte] = []
-            for (_, aporteData) in data {
-                do {
-                    let jsonData = try JSONSerialization.data(withJSONObject: aporteData)
-                    let aporte = try JSONDecoder().decode(Aporte.self, from: jsonData)
-                    aportes.append(aporte)
-                } catch {
-                    print("Error decodificando aporte: \(error)")
+    func crearAporte(_ aporte: Aporte, familiaId: String) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            do {
+                let aporteData = try JSONEncoder().encode(aporte)
+                let aporteDict = try JSONSerialization.jsonObject(with: aporteData) as? [String: Any] ?? [:]
+                
+                database.child("familias").child(familiaId).child("aportes").child(aporte.id).setValue(aporteDict) { error, _ in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: ())
+                    }
                 }
+            } catch {
+                continuation.resume(throwing: error)
             }
-            completion(.success(aportes))
         }
-        listeners.append(handle)
     }
     
-    func guardarAporteFamiliar(familiaId: String, aporte: Aporte, completion: @escaping (Result<Void, Error>) -> Void) {
-        do {
-            let aporteData = try JSONEncoder().encode(aporte)
-            let aporteDict = try JSONSerialization.jsonObject(with: aporteData) as? [String: Any] ?? [:]
-            
-            database.child("familias").child(familiaId).child("aportes").child(aporte.id).setValue(aporteDict) { error, _ in
+    func eliminarAporte(aporteId: String, familiaId: String) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            database.child("familias").child(familiaId).child("aportes").child(aporteId).removeValue { error, _ in
                 if let error = error {
-                    completion(.failure(error))
+                    continuation.resume(throwing: error)
                 } else {
-                    completion(.success(()))
+                    continuation.resume(returning: ())
                 }
             }
-        } catch {
-            completion(.failure(error))
         }
     }
     
     // MARK: - Deudas Familiares
     
-    func cargarDeudasFamiliares(familiaId: String, completion: @escaping (Result<[Deuda], Error>) -> Void) {
-        database.child("familias").child(familiaId).child("deudas").observeSingleEvent(of: .value) { snapshot in
-            guard let data = snapshot.value as? [String: Any] else {
-                completion(.success([])) // No hay deudas aún
-                return
-            }
-            
-            var deudas: [Deuda] = []
-            for (_, deudaData) in data {
-                do {
-                    let jsonData = try JSONSerialization.data(withJSONObject: deudaData)
-                    let deuda = try JSONDecoder().decode(Deuda.self, from: jsonData)
-                    deudas.append(deuda)
-                } catch {
-                    print("Error decodificando deuda: \(error)")
+    func obtenerDeudasFamilia(familiaId: String) async throws -> [DeudaPresupuesto] {
+        return try await withCheckedThrowingContinuation { continuation in
+            database.child("familias").child(familiaId).child("deudas").observeSingleEvent(of: .value) { snapshot in
+                guard let data = snapshot.value as? [String: Any] else {
+                    continuation.resume(returning: [])
+                    return
                 }
+                
+                var deudas: [DeudaPresupuesto] = []
+                for (_, deudaData) in data {
+                    do {
+                        let jsonData = try JSONSerialization.data(withJSONObject: deudaData)
+                        let deuda = try JSONDecoder().decode(DeudaPresupuesto.self, from: jsonData)
+                        deudas.append(deuda)
+                    } catch {
+                        print("Error decodificando deuda: \(error)")
+                    }
+                }
+                continuation.resume(returning: deudas)
             }
-            completion(.success(deudas))
         }
     }
     
-    func observarDeudasFamiliares(familiaId: String, completion: @escaping (Result<[Deuda], Error>) -> Void) {
-        let handle = database.child("familias").child(familiaId).child("deudas").observe(.value) { snapshot in
-            guard let data = snapshot.value as? [String: Any] else {
-                completion(.success([])) // No hay deudas aún
-                return
-            }
-            
-            var deudas: [Deuda] = []
-            for (_, deudaData) in data {
-                do {
-                    let jsonData = try JSONSerialization.data(withJSONObject: deudaData)
-                    let deuda = try JSONDecoder().decode(Deuda.self, from: jsonData)
-                    deudas.append(deuda)
-                } catch {
-                    print("Error decodificando deuda: \(error)")
+    func crearDeuda(_ deuda: DeudaPresupuesto, familiaId: String) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            do {
+                let deudaData = try JSONEncoder().encode(deuda)
+                let deudaDict = try JSONSerialization.jsonObject(with: deudaData) as? [String: Any] ?? [:]
+                
+                database.child("familias").child(familiaId).child("deudas").child(deuda.id).setValue(deudaDict) { error, _ in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: ())
+                    }
                 }
+            } catch {
+                continuation.resume(throwing: error)
             }
-            completion(.success(deudas))
         }
-        listeners.append(handle)
     }
     
-    func guardarDeudaFamiliar(familiaId: String, deuda: Deuda, completion: @escaping (Result<Void, Error>) -> Void) {
-        do {
-            let deudaData = try JSONEncoder().encode(deuda)
-            let deudaDict = try JSONSerialization.jsonObject(with: deudaData) as? [String: Any] ?? [:]
-            
-            database.child("familias").child(familiaId).child("deudas").child(deuda.id).setValue(deudaDict) { error, _ in
+    func eliminarDeuda(deudaId: String, familiaId: String) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            database.child("familias").child(familiaId).child("deudas").child(deudaId).removeValue { error, _ in
                 if let error = error {
-                    completion(.failure(error))
+                    continuation.resume(throwing: error)
                 } else {
-                    completion(.success(()))
+                    continuation.resume(returning: ())
                 }
             }
-        } catch {
-            completion(.failure(error))
         }
     }
     
     // MARK: - Invitaciones
     
-    func crearInvitacion(_ invitacion: InvitacionFamiliar, completion: @escaping (Result<Void, Error>) -> Void) {
-        do {
-            let invitacionData = try JSONEncoder().encode(invitacion)
-            let invitacionDict = try JSONSerialization.jsonObject(with: invitacionData) as? [String: Any] ?? [:]
-            
-            database.child("invitaciones").child(invitacion.id).setValue(invitacionDict) { error, _ in
-                if let error = error {
-                    completion(.failure(error))
-                } else {
-                    completion(.success(()))
+    func buscarInvitacionPorCodigo(_ codigo: String) async throws -> InvitacionFamiliar? {
+        return try await withCheckedThrowingContinuation { continuation in
+            database.child("invitaciones").queryOrdered(byChild: "codigoInvitacion").queryEqual(toValue: codigo).observeSingleEvent(of: .value) { snapshot in
+                guard let data = snapshot.value as? [String: Any],
+                      let invitacionData = data.values.first else {
+                    continuation.resume(returning: nil)
+                    return
                 }
-            }
-        } catch {
-            completion(.failure(error))
-        }
-    }
-    
-    func cargarInvitacionesPendientes(email: String, completion: @escaping (Result<[InvitacionFamiliar], Error>) -> Void) {
-        database.child("invitaciones").queryOrdered(byChild: "invitadoEmail").queryEqual(toValue: email).observeSingleEvent(of: .value) { snapshot in
-            guard let data = snapshot.value as? [String: Any] else {
-                completion(.success([])) // No hay invitaciones
-                return
-            }
-            
-            var invitaciones: [InvitacionFamiliar] = []
-            for (_, invitacionData) in data {
+                
                 do {
                     let jsonData = try JSONSerialization.data(withJSONObject: invitacionData)
                     let invitacion = try JSONDecoder().decode(InvitacionFamiliar.self, from: jsonData)
-                    if invitacion.estado == .pendiente && invitacion.fechaExpiracion > Date() {
-                        invitaciones.append(invitacion)
-                    }
+                    continuation.resume(returning: invitacion)
                 } catch {
-                    print("Error decodificando invitación: \(error)")
+                    continuation.resume(throwing: error)
                 }
             }
-            completion(.success(invitaciones))
         }
     }
     
-    func aceptarInvitacion(invitacionId: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        database.child("invitaciones").child(invitacionId).child("estado").setValue(EstadoInvitacion.aceptada.rawValue) { error, _ in
-            if let error = error {
-                completion(.failure(error))
-            } else {
-                completion(.success(()))
+    func actualizarInvitacion(_ invitacion: InvitacionFamiliar) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            do {
+                let invitacionData = try JSONEncoder().encode(invitacion)
+                let invitacionDict = try JSONSerialization.jsonObject(with: invitacionData) as? [String: Any] ?? [:]
+                
+                database.child("invitaciones").child(invitacion.id).setValue(invitacionDict) { error, _ in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: ())
+                    }
+                }
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+    
+    func crearInvitacion(_ invitacion: InvitacionFamiliar) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            do {
+                let invitacionData = try JSONEncoder().encode(invitacion)
+                let invitacionDict = try JSONSerialization.jsonObject(with: invitacionData) as? [String: Any] ?? [:]
+                
+                database.child("invitaciones").child(invitacion.id).setValue(invitacionDict) { error, _ in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: ())
+                    }
+                }
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+    
+    // Método optimizado para obtener familia del usuario
+    func obtenerFamiliaDelUsuario(usuarioId: String) async throws -> (Familia?, MiembroFamilia?) {
+        return try await withCheckedThrowingContinuation { continuation in
+            // Primero obtener el usuario para conseguir su familiaId
+            database.child("usuarios").child(usuarioId).observeSingleEvent(of: .value) { snapshot in
+                guard let userData = snapshot.value as? [String: Any],
+                      let familiaId = userData["familiaId"] as? String else {
+                    // Usuario sin familia asignada
+                    continuation.resume(returning: (nil, nil))
+                    return
+                }
+                
+                // Ahora obtener la familia y el miembro en paralelo
+                let group = DispatchGroup()
+                var familia: Familia?
+                var miembro: MiembroFamilia?
+                var error: Error?
+                
+                // Obtener familia
+                group.enter()
+                self.database.child("familias").child(familiaId).observeSingleEvent(of: .value) { familiaSnapshot in
+                    defer { group.leave() }
+                    
+                    guard let familiaData = familiaSnapshot.value as? [String: Any] else {
+                        error = NSError(domain: "FirebaseService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Familia no encontrada"])
+                        return
+                    }
+                    
+                    do {
+                        let jsonData = try JSONSerialization.data(withJSONObject: familiaData)
+                        familia = try JSONDecoder().decode(Familia.self, from: jsonData)
+                    } catch {
+                        print("Error decodificando familia: \(error)")
+                    }
+                }
+                
+                // Obtener miembro
+                group.enter()
+                self.database.child("familias").child(familiaId).child("miembros").child(usuarioId).observeSingleEvent(of: .value) { miembroSnapshot in
+                    defer { group.leave() }
+                    
+                    guard let miembroData = miembroSnapshot.value as? [String: Any] else {
+                        error = NSError(domain: "FirebaseService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Miembro no encontrado"])
+                        return
+                    }
+                    
+                    do {
+                        let jsonData = try JSONSerialization.data(withJSONObject: miembroData)
+                        miembro = try JSONDecoder().decode(MiembroFamilia.self, from: jsonData)
+                        miembro?.familiaId = familiaId
+                    } catch {
+                        print("Error decodificando miembro: \(error)")
+                    }
+                }
+                
+                group.notify(queue: .main) {
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: (familia, miembro))
+                    }
+                }
+            } withCancel: { error in
+                continuation.resume(throwing: error)
             }
         }
     }
