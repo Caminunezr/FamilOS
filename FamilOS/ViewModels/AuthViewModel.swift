@@ -264,13 +264,68 @@ class AuthViewModel: ObservableObject {
             case AuthErrorCode.appNotAuthorized.rawValue:
                 return "La aplicación no está autorizada para usar Firebase Authentication."
             case AuthErrorCode.keychainError.rawValue:
-                return "Error de Keychain: La aplicación no tiene permisos para acceder al almacén seguro de macOS. Esto se debe a entitlements faltantes."
+                return """
+                ❌ Error de Keychain: Firebase no puede acceder al almacén seguro de macOS.
+                
+                📋 Para resolverlo:
+                1. Abre el proyecto en Xcode
+                2. Ve a 'Signing & Capabilities'
+                3. Activa 'Automatically manage signing'
+                4. Selecciona tu Apple ID como Team
+                5. Agrega el entitlement 'keychain-access-groups'
+                
+                🔧 Alternativa: Usa UserDefaults para desarrollo local (menos seguro)
+                """
             case 17995: // ERROR_KEYCHAIN_ERROR específico
-                return "Error de acceso al Keychain: Falta el entitlement 'keychain-access-groups'. Firebase requiere acceso al Keychain para almacenar tokens de autenticación."
+                let nsError = error as NSError
+                if let failureReason = nsError.userInfo[NSLocalizedFailureReasonErrorKey] as? String {
+                    if failureReason.contains("-34018") || failureReason.contains("required entitlement") {
+                        return """
+                        ❌ Error de Keychain (-34018): "A required entitlement isn't present"
+                        
+                        🔧 SOLUCIÓN RECOMENDADA:
+                        1. En Xcode, selecciona el proyecto 'FamilOS'
+                        2. Ve a pestaña "Signing & Capabilities"
+                        3. Activa ✅ "Automatically manage signing"
+                        4. Selecciona tu Apple ID en "Team"
+                        5. Verifica que "Keychain Sharing" esté habilitado
+                        6. Limpia y reconstruye: Cmd+Shift+K → Cmd+B
+                        
+                        📋 Si el problema persiste:
+                        • Abre Terminal y ejecuta: codesign --force --deep --sign - FamilOS.app
+                        • O desactiva temporalmente Firebase Keychain en configuración
+                        
+                        ⚠️  Este error impide que Firebase guarde tokens de autenticación seguros.
+                        """
+                    }
+                }
+                return """
+                ❌ Error de acceso al Keychain (17995): Problema de configuración de entitlements.
+                
+                📋 Soluciones:
+                1. Configura firma de código en Xcode (recomendado)
+                2. O implementa almacenamiento alternativo para desarrollo
+                
+                ⚠️  Firebase requiere keychain para tokens de autenticación seguros
+                """
             default:
-                // Verificar si es error de keychain por descripción
-                if errorDescription.contains("keychain") || errorDescription.contains("secitemadd") {
-                    return "Error de Keychain (-34018): Falta el entitlement 'keychain-access-groups' para acceder al almacén seguro de macOS."
+                // Verificar si es error de keychain por descripción o código -34018
+                let nsError = error as NSError
+                if errorDescription.contains("keychain") || errorDescription.contains("secitemadd") || 
+                   nsError.code == -34018 || errorDescription.contains("-34018") {
+                    return """
+                    ❌ Error de Keychain (-34018): "A required entitlement isn't present"
+                    
+                    🔧 PARA SOLUCIONARLO:
+                    1. Abre Xcode → Proyecto FamilOS → "Signing & Capabilities"
+                    2. Activa "Automatically manage signing"
+                    3. Selecciona tu Development Team (Apple ID)
+                    4. Asegúrate que "Keychain Sharing" esté habilitado
+                    5. Limpia proyecto: Product → Clean Build Folder
+                    6. Reconstruye: Product → Build
+                    
+                    💡 Causa: Firebase no puede acceder al keychain de macOS sin los entitlements correctos.
+                    """
                 }
                 print("Error no manejado específicamente: \(authError.localizedDescription)")
                 return "Error: \(authError.localizedDescription)"
@@ -339,6 +394,20 @@ class AuthViewModel: ObservableObject {
             diagnostico += "Network Server: \(networkServer)\n"
         } else {
             diagnostico += "❌ Network Server: NO ENCONTRADO\n"
+        }
+        
+        // Verificar Keychain Access Groups
+        if let keychainGroups = bundle.object(forInfoDictionaryKey: "keychain-access-groups") {
+            diagnostico += "Keychain Access Groups: \(keychainGroups)\n"
+        } else {
+            diagnostico += "❌ Keychain Access Groups: NO ENCONTRADO\n"
+        }
+        
+        // Verificar Application Groups
+        if let appGroups = bundle.object(forInfoDictionaryKey: "com.apple.security.application-groups") {
+            diagnostico += "Application Groups: \(appGroups)\n"
+        } else {
+            diagnostico += "❌ Application Groups: NO ENCONTRADO\n"
         }
         
         return diagnostico

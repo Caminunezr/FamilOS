@@ -1,0 +1,54 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "usuarios": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid",
+        ".validate": "auth != null"
+      }
+    },
+    "familias": {
+      "$familiaId": {
+        ".read": "auth != null && (root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists() || root.child('usuarios').child(auth.uid).child('familiaId').val() === $familiaId)",
+        ".write": "auth != null && (root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists() || root.child('usuarios').child(auth.uid).child('familiaId').val() === $familiaId)",
+        "miembros": {
+          "$uid": {
+            ".validate": "auth != null"
+          }
+        },
+        "cuentas": {
+          "$cuentaId": {
+            ".validate": "auth != null"
+          }
+        },
+        "presupuestos": {
+          "$presupuestoId": {
+            ".validate": "auth != null"
+          }
+        },
+        "aportes": {
+          "$aporteId": {
+            ".validate": "auth != null"
+          }
+        },
+        "deudas": {
+          "$deudaId": {
+            ".validate": "auth != null"
+          }
+        }
+      }
+    },
+    "invitaciones": {
+      "$invitacionId": {
+        ".read": "auth != null && (data.child('invitadoEmail').val() === root.child('usuarios').child(auth.uid).child('email').val() || data.child('invitadoPor').val() === auth.uid)",
+        ".write": "auth != null && (data.child('invitadoEmail').val() === root.child('usuarios').child(auth.uid).child('email').val() || data.child('invitadoPor').val() === auth.uid)"
+      }
+    },
+    "test": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}

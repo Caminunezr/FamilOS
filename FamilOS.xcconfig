@@ -1,0 +1,5 @@
+// Configuración temporal para desarrollo sin equipo
+CODE_SIGN_IDENTITY = -
+CODE_SIGN_STYLE = Manual
+DEVELOPMENT_TEAM = 
+PROVISIONING_PROFILE_SPECIFIER = 
