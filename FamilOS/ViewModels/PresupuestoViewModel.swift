@@ -114,6 +114,7 @@ enum NivelUrgencia {
 }
 
 // MARK: - PresupuestoViewModel
+@MainActor
 class PresupuestoViewModel: ObservableObject {
     @Published var presupuestos: [PresupuestoMensual] = []
     @Published var aportes: [Aporte] = []
@@ -151,23 +152,22 @@ class PresupuestoViewModel: ObservableObject {
         
         Task {
             do {
-                async let presupuestoTask = firebaseService.obtenerPresupuestosFamilia(familiaId: familiaId)
-                async let aportesTask = firebaseService.obtenerAportesFamilia(familiaId: familiaId)
-                async let deudasTask = firebaseService.obtenerDeudasFamilia(familiaId: familiaId)
+                async let presupuestosTask = firebaseService.obtenerPresupuestos(familiaId: familiaId)
+                async let deudasTask = firebaseService.obtenerDeudas(familiaId: familiaId)
                 
-                let (presupuestosCargados, aportesCargados, deudasCargadas) = try await (presupuestoTask, aportesTask, deudasTask)
+                let (presupuestosObtenidos, deudasObtenidas) = try await (presupuestosTask, deudasTask)
                 
-                await MainActor.run {
-                    self.presupuestos = presupuestosCargados
-                    self.aportes = aportesCargados
-                    self.deudas = deudasCargadas
-                    self.isLoading = false
+                self.presupuestos = presupuestosObtenidos
+                self.deudas = deudasObtenidas
+                self.isLoading = false
+                
+                // Cargar aportes del presupuesto actual si existe
+                if let presupuestoActual = presupuestoActual {
+                    await cargarAportes(presupuestoId: presupuestoActual.id)
                 }
             } catch {
-                await MainActor.run {
-                    self.error = "Error al cargar datos de presupuesto: \(error.localizedDescription)"
-                    self.isLoading = false
-                }
+                self.error = "Error al cargar datos: \(error.localizedDescription)"
+                self.isLoading = false
             }
         }
     }
@@ -212,13 +212,14 @@ class PresupuestoViewModel: ObservableObject {
         
         Task {
             do {
-                try await firebaseService.crearPresupuesto(presupuesto, familiaId: familiaId)
+                try await firebaseService.crearPresupuesto(familiaId: familiaId, presupuesto: presupuesto)
                 await cargarDatosFamiliares()
-            } catch {
                 await MainActor.run {
-                    self.error = "Error al crear presupuesto: \(error.localizedDescription)"
                     self.isLoading = false
                 }
+            } catch {
+                self.error = "Error al crear presupuesto: \(error.localizedDescription)"
+                self.isLoading = false
             }
         }
     }
@@ -231,13 +232,12 @@ class PresupuestoViewModel: ObservableObject {
         
         Task {
             do {
-                try await firebaseService.crearAporte(aporte, familiaId: familiaId)
-                await cargarDatosFamiliares()
+                try await firebaseService.crearAporte(familiaId: familiaId, aporte: aporte)
+                await cargarAportes(presupuestoId: aporte.presupuestoId)
+                self.isLoading = false
             } catch {
-                await MainActor.run {
-                    self.error = "Error al agregar aporte: \(error.localizedDescription)"
-                    self.isLoading = false
-                }
+                self.error = "Error al agregar aporte: \(error.localizedDescription)"
+                self.isLoading = false
             }
         }
     }
@@ -250,14 +250,54 @@ class PresupuestoViewModel: ObservableObject {
         
         Task {
             do {
-                try await firebaseService.crearDeuda(deuda, familiaId: familiaId)
+                try await firebaseService.crearDeuda(familiaId: familiaId, deuda: deuda)
+                await cargarDatosFamiliares()
+                await MainActor.run {
+                    self.isLoading = false
+                }
+            } catch {
+                self.error = "Error al agregar deuda: \(error.localizedDescription)"
+                self.isLoading = false
+            }
+        }
+    }
+    
+    func actualizarDeuda(_ deuda: DeudaPresupuesto) {
+        guard let familiaId = familiaId else { return }
+        
+        Task {
+            do {
+                try await firebaseService.actualizarDeuda(familiaId: familiaId, deuda: deuda)
                 await cargarDatosFamiliares()
             } catch {
                 await MainActor.run {
-                    self.error = "Error al agregar deuda: \(error.localizedDescription)"
-                    self.isLoading = false
+                    self.error = "Error al actualizar deuda: \(error.localizedDescription)"
                 }
             }
+        }
+    }
+    
+    func eliminarDeuda(_ deudaId: String) {
+        guard let familiaId = familiaId else { return }
+        
+        Task {
+            do {
+                try await firebaseService.eliminarDeuda(familiaId: familiaId, deudaId: deudaId)
+                await cargarDatosFamiliares()
+            } catch {
+                self.error = "Error al eliminar deuda: \(error.localizedDescription)"
+            }
+        }
+    }
+    
+    private func cargarAportes(presupuestoId: String) async {
+        guard let familiaId = familiaId else { return }
+        
+        do {
+            let aportesObtenidos = try await firebaseService.obtenerAportes(familiaId: familiaId, presupuestoId: presupuestoId)
+            self.aportes = aportesObtenidos
+        } catch {
+            self.error = "Error al cargar aportes: \(error.localizedDescription)"
         }
     }
     
@@ -269,7 +309,7 @@ class PresupuestoViewModel: ObservableObject {
         
         Task {
             do {
-                try await firebaseService.eliminarAporte(aporteId: id, familiaId: familiaId)
+                try await firebaseService.eliminarAporte(familiaId: familiaId, aporteId: id)
                 await cargarDatosFamiliares()
             } catch {
                 await MainActor.run {
@@ -288,7 +328,7 @@ class PresupuestoViewModel: ObservableObject {
         
         Task {
             do {
-                try await firebaseService.eliminarDeuda(deudaId: id, familiaId: familiaId)
+                try await firebaseService.eliminarDeuda(familiaId: familiaId, deudaId: id)
                 await cargarDatosFamiliares()
             } catch {
                 await MainActor.run {
@@ -306,7 +346,7 @@ class PresupuestoViewModel: ObservableObject {
             // Crear nuevo presupuesto para el próximo mes
             let calendar = Calendar.current
             if let siguienteMes = calendar.date(byAdding: .month, value: 1, to: mesSeleccionado) {
-                var nuevoPresupuesto = PresupuestoMensual(
+                let nuevoPresupuesto = PresupuestoMensual(
                     fechaMes: siguienteMes,
                     creador: "Usuario",
                     cerrado: false,

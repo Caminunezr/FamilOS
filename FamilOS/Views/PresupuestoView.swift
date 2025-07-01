@@ -1,5 +1,5 @@
 import SwiftUI
-import Charts
+import Charts // Importar Charts para los gráficos
 
 struct PresupuestoView: View {
     @EnvironmentObject var viewModel: PresupuestoViewModel
@@ -9,13 +9,37 @@ struct PresupuestoView: View {
     
     var body: some View {
         NavigationStack {
-            ScrollView {
+            ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 20) {
                     // Selector de mes
-                    SelectorMesView(
-                        mesSeleccionado: $viewModel.mesSeleccionado,
-                        cambiarMes: viewModel.cambiarMes
-                    )
+                    HStack {
+                        Button {
+                            viewModel.cambiarMes(avanzar: false)
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.title3)
+                                .foregroundColor(.blue)
+                        }
+                        
+                        Spacer()
+                        
+                        Text(mesFormateado(viewModel.mesSeleccionado))
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        
+                        Spacer()
+                        
+                        Button {
+                            viewModel.cambiarMes(avanzar: true)
+                        } label: {
+                            Image(systemName: "chevron.right")
+                                .font(.title3)
+                                .foregroundColor(.blue)
+                        }
+                    }
+                    .padding()
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(12)
                     
                     // Resumen financiero
                     ResumenFinancieroView(viewModel: viewModel)
@@ -34,7 +58,7 @@ struct PresupuestoView: View {
                     DeudasListView(
                         deudas: viewModel.deudasDelMes,
                         total: viewModel.totalDeudasMensuales,
-                        onDelete: viewModel.eliminarDeuda
+                        onDelete: { deudaId in viewModel.eliminarDeuda(deudaId) }
                     )
                     
                     // Acciones de presupuesto
@@ -74,25 +98,6 @@ struct PresupuestoView: View {
                 .padding()
             }
             .navigationTitle("Presupuesto Mensual")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button {
-                            mostrarFormularioAporte = true
-                        } label: {
-                            Label("Agregar Aporte", systemImage: "plus.circle")
-                        }
-                        
-                        Button {
-                            mostrarFormularioDeuda = true
-                        } label: {
-                            Label("Agregar Gasto/Deuda", systemImage: "minus.circle")
-                        }
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                }
-            }
         }
         .sheet(isPresented: $mostrarFormularioAporte) {
             NuevoAporteView(viewModel: viewModel)
@@ -101,6 +106,14 @@ struct PresupuestoView: View {
         .sheet(isPresented: $mostrarFormularioDeuda) {
             NuevaDeudaView(viewModel: viewModel)
         }
+    }
+    
+    // MARK: - Helper Methods
+    private func mesFormateado(_ fecha: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        formatter.locale = Locale(identifier: "es_ES")
+        return formatter.string(from: fecha).capitalized
     }
 }
 
@@ -640,7 +653,7 @@ struct NuevoAporteView: View {
                     TextField("0.00", text: $montoTexto)
                         .font(.title2)
                         .fontWeight(.medium)
-                        .onChange(of: montoTexto) { newValue in
+                        .onChange(of: montoTexto) { _, newValue in
                             if let valor = Double(newValue) {
                                 monto = valor
                                 withAnimation(.easeInOut(duration: 0.3)) {
@@ -871,7 +884,7 @@ struct NuevoAporteView: View {
     // MARK: - Helper Methods
     
     private func emojiParaUsuario(_ usuario: String) -> String {
-        return miembrosFamilia.first { $0.0 == usuario }?.1 ?? "👤"
+        miembrosFamilia.first { $0.0 == usuario }?.1 ?? "👤"
     }
     
     private func detectarCategoria() {
@@ -914,8 +927,6 @@ struct NuevoAporteView: View {
         }
     }
 }
-
-// MARK: - Componentes Auxiliares
 
 struct BotonMiembro: View {
     let nombre: String
@@ -1057,6 +1068,14 @@ struct NuevaDeudaView: View {
             return montoTotal / Double(cuotas)
         }
     }
+}
+
+// MARK: - Helper Functions
+private func mesFormateado(_ fecha: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "MMMM yyyy"
+    formatter.locale = Locale(identifier: "es_ES")
+    return formatter.string(from: fecha).capitalized
 }
 
 struct PresupuestoView_Previews: PreviewProvider {

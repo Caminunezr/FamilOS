@@ -132,12 +132,42 @@ class AuthViewModel: ObservableObject {
         )
         
         do {
+            print("👤 Creando perfil de usuario existente: \(usuario.nombre)")
             try await firebaseService.crearUsuario(usuario)
+            
             await MainActor.run {
                 self.usuarioActual = usuario
-                self.mostrarCreacionFamilia = true
             }
+            
+            // Crear automáticamente una familia para este usuario
+            print("🏠 Creando familia automática para usuario existente...")
+            let nuevaFamilia = Familia(
+                nombre: "Familia de \(usuario.nombre)",
+                descripcion: "Familia creada automáticamente",
+                adminId: uid
+            )
+            
+            let miembro = MiembroFamilia(
+                id: uid,
+                nombre: usuario.nombre,
+                email: usuario.email,
+                rol: .admin,
+                familiaId: nuevaFamilia.id
+            )
+            
+            print("📝 Creando familia con ID: \(nuevaFamilia.id)")
+            try await firebaseService.crearFamiliaConAdministrador(nuevaFamilia, administrador: miembro)
+            
+            await MainActor.run {
+                self.familiaActual = nuevaFamilia
+                self.miembroFamiliar = miembro
+                self.isAuthenticated = true
+            }
+            
+            print("✅ Usuario y familia creados exitosamente para usuario existente")
+            
         } catch {
+            print("❌ Error al crear perfil de usuario existente: \(error)")
             await MainActor.run {
                 self.error = "Error al crear perfil: \(error.localizedDescription)"
             }
@@ -254,9 +284,11 @@ class AuthViewModel: ObservableObject {
         let firebaseService = FirebaseService()
         Task {
             do {
+                print("👤 Creando usuario en Database: \(usuario.nombre)")
                 // 1. Crear usuario en Firebase Database
                 try await firebaseService.crearUsuario(usuario)
                 
+                print("🏠 Preparando familia automática...")
                 // 2. Crear una familia automáticamente para el nuevo usuario
                 let nuevaFamilia = Familia(
                     nombre: "Familia de \(nombre)",
@@ -264,10 +296,7 @@ class AuthViewModel: ObservableObject {
                     adminId: uid
                 )
                 
-                // 3. Crear la familia en Firebase
-                try await firebaseService.crearFamilia(nuevaFamilia)
-                
-                // 4. Agregar al usuario como administrador de la familia
+                // 3. Crear el miembro administrador
                 let miembro = MiembroFamilia(
                     id: uid,
                     nombre: nombre,
@@ -276,7 +305,9 @@ class AuthViewModel: ObservableObject {
                     familiaId: nuevaFamilia.id
                 )
                 
-                try await firebaseService.agregarMiembroFamilia(familiaId: nuevaFamilia.id, miembro: miembro)
+                print("📝 Creando familia con ID: \(nuevaFamilia.id)")
+                // 4. Crear la familia y agregar al usuario como administrador en una sola operación
+                try await firebaseService.crearFamiliaConAdministrador(nuevaFamilia, administrador: miembro)
                 
                 await MainActor.run {
                     self.isAuthenticating = false
@@ -455,7 +486,7 @@ class AuthViewModel: ObservableObject {
         diagnostico += "Auth configurado: \(auth.currentUser == nil ? "Sin usuario" : "Con usuario")\n"
         
         // Verificar Database
-        let database = Database.database()
+        let _ = Database.database()
         diagnostico += "Database configurado: ✅\n"
         
         // Verificar entitlements
@@ -551,8 +582,8 @@ class AuthViewModel: ObservableObject {
     private func testFirebaseConnection() {
         print("🔥 Testing Firebase Auth connection...")
         
-        // Test simple de conexión a Firebase Auth
-        Auth.auth().fetchSignInMethods(forEmail: "test@test.com") { methods, error in
+        // Test de conexión usando signInAnonymously en lugar del método deprecado
+        Auth.auth().signInAnonymously { authResult, error in
             DispatchQueue.main.async {
                 if let error = error {
                     print("❌ Error de conexión Firebase: \(error)")
@@ -569,6 +600,9 @@ class AuthViewModel: ObservableObject {
                 } else {
                     print("✅ Conexión a Firebase exitosa")
                     self.error = "✅ Conexión a Firebase exitosa"
+                    
+                    // Cerrar la sesión anónima inmediatamente después de la prueba
+                    try? Auth.auth().signOut()
                 }
             }
         }
@@ -585,24 +619,30 @@ class AuthViewModel: ObservableObject {
         
         Task {
             do {
+                print("🎯 Iniciando creación de familia para usuario: \(usuario.nombre)")
+                
                 let familia = Familia(
                     nombre: nombre,
                     descripcion: descripcion,
                     adminId: usuario.id
                 )
                 
-                // Crear familia en Firebase
-                try await firebaseService.crearFamilia(familia)
-                
-                // Agregar al usuario como miembro administrador
+                // Crear el miembro administrador
                 let miembro = MiembroFamilia(
                     id: usuario.id,
                     nombre: usuario.nombre,
                     email: usuario.email,
-                    rol: .admin
+                    rol: .admin,
+                    familiaId: familia.id
                 )
                 
-                try await firebaseService.agregarMiembroFamilia(familiaId: familia.id, miembro: miembro)
+                print("📋 Familia preparada: \(familia.id)")
+                print("👑 Admin preparado: \(miembro.nombre) con rol \(miembro.rol)")
+                
+                // Crear familia y agregar al usuario como administrador en una sola operación
+                try await firebaseService.crearFamiliaConAdministrador(familia, administrador: miembro)
+                
+                print("🎉 Familia creada exitosamente!")
                 
                 await MainActor.run {
                     self.familiaActual = familia
@@ -612,6 +652,7 @@ class AuthViewModel: ObservableObject {
                 }
                 
             } catch {
+                print("❌ Error al crear familia: \(error)")
                 await MainActor.run {
                     self.error = "Error al crear familia: \(error.localizedDescription)"
                     self.isAuthenticating = false

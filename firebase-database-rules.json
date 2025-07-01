@@ -14,7 +14,7 @@
       ".write": false,
       "$familiaId": {
         ".read": "auth != null && (root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists() || root.child('familias').child($familiaId).child('adminId').val() === auth.uid)",
-        ".write": "auth != null && (root.child('familias').child($familiaId).child('miembros').child(auth.uid).child('rol').val() === 'admin' || root.child('familias').child($familiaId).child('adminId').val() === auth.uid || !root.child('familias').child($familiaId).exists())",
+        ".write": "auth != null && (!root.child('familias').child($familiaId).exists() || root.child('familias').child($familiaId).child('adminId').val() === auth.uid || root.child('familias').child($familiaId).child('miembros').child(auth.uid).child('rol').val() === 'admin')",
         "miembros": {
           "$uid": {
             ".validate": "auth != null"

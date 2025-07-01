@@ -1,0 +1,34 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "usuarios": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid",
+        ".validate": "auth != null"
+      }
+    },
+    "familias": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$familiaId": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        ".validate": "auth != null"
+      }
+    },
+    "invitaciones": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$invitacionId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "test": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}

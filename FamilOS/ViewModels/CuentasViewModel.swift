@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Combine
 
+@MainActor
 class CuentasViewModel: ObservableObject {
     @Published var cuentas: [Cuenta] = []
     @Published var filtroCategorias: Set<String> = []
@@ -23,6 +24,7 @@ class CuentasViewModel: ObservableObject {
     
     private let firebaseService = FirebaseService()
     private var familiaId: String?
+    private var cancellables = Set<AnyCancellable>()
     
     enum VistaOrganizacion: String, CaseIterable {
         case porAño = "Por Año"
@@ -76,6 +78,7 @@ class CuentasViewModel: ObservableObject {
     func configurarFamilia(_ familiaId: String) {
         self.familiaId = familiaId
         cargarCuentasFamiliares()
+        iniciarObservadorCuentas()
     }
     
     // MARK: - Carga de datos familiares
@@ -86,19 +89,25 @@ class CuentasViewModel: ObservableObject {
         isLoading = true
         error = nil
         
-        Task {
+        Task { @MainActor in
             do {
-                let cuentasFamiliares = try await firebaseService.obtenerCuentasFamilia(familiaId: familiaId)
+                let cuentasFamiliares = try await firebaseService.obtenerCuentas(familiaId: familiaId)
                 
-                await MainActor.run {
-                    self.cuentas = cuentasFamiliares
-                    self.isLoading = false
-                }
+                self.cuentas = cuentasFamiliares
+                self.isLoading = false
             } catch {
-                await MainActor.run {
-                    self.error = "Error al cargar cuentas: \(error.localizedDescription)"
-                    self.isLoading = false
-                }
+                self.error = "Error al cargar cuentas: \(error.localizedDescription)"
+                self.isLoading = false
+            }
+        }
+    }
+    
+    private func iniciarObservadorCuentas() {
+        guard let familiaId = familiaId else { return }
+        
+        firebaseService.observarCuentas(familiaId: familiaId) { [weak self] cuentas in
+            Task { @MainActor in
+                self?.cuentas = cuentas
             }
         }
     }
@@ -113,13 +122,11 @@ class CuentasViewModel: ObservableObject {
         
         Task {
             do {
-                try await firebaseService.crearCuenta(cuenta, familiaId: familiaId)
-                await cargarCuentasFamiliares() // Recargar para obtener la versión actualizada
+                try await firebaseService.crearCuenta(familiaId: familiaId, cuenta: cuenta)
+                self.isLoading = false
             } catch {
-                await MainActor.run {
-                    self.error = "Error al agregar cuenta: \(error.localizedDescription)"
-                    self.isLoading = false
-                }
+                self.error = "Error al agregar cuenta: \(error.localizedDescription)"
+                self.isLoading = false
             }
         }
     }
@@ -132,18 +139,16 @@ class CuentasViewModel: ObservableObject {
         
         Task {
             do {
-                try await firebaseService.actualizarCuenta(cuenta, familiaId: familiaId)
-                await cargarCuentasFamiliares() // Recargar para obtener la versión actualizada
+                try await firebaseService.actualizarCuenta(familiaId: familiaId, cuenta: cuenta)
+                self.isLoading = false
             } catch {
-                await MainActor.run {
-                    self.error = "Error al actualizar cuenta: \(error.localizedDescription)"
-                    self.isLoading = false
-                }
+                self.error = "Error al actualizar cuenta: \(error.localizedDescription)"
+                self.isLoading = false
             }
         }
     }
     
-    func eliminarCuenta(_ cuentaId: String) {
+    func eliminarCuenta(_ cuenta: Cuenta) {
         guard let familiaId = familiaId else { return }
         
         isLoading = true
@@ -151,19 +156,34 @@ class CuentasViewModel: ObservableObject {
         
         Task {
             do {
-                try await firebaseService.eliminarCuenta(cuentaId: cuentaId, familiaId: familiaId)
-                await cargarCuentasFamiliares() // Recargar para obtener la versión actualizada
+                try await firebaseService.eliminarCuenta(familiaId: familiaId, cuentaId: cuenta.id)
+                self.isLoading = false
             } catch {
-                await MainActor.run {
-                    self.error = "Error al eliminar cuenta: \(error.localizedDescription)"
-                    self.isLoading = false
-                }
+                self.error = "Error al eliminar cuenta: \(error.localizedDescription)"
+                self.isLoading = false
+            }
+        }
+    }
+    
+    func marcarComoPagada(_ cuenta: Cuenta, monto: Double? = nil, usuario: String) {
+        guard let familiaId = familiaId else { return }
+        
+        Task {
+            do {
+                try await firebaseService.registrarPagoCuenta(
+                    familiaId: familiaId,
+                    cuentaId: cuenta.id,
+                    monto: monto ?? cuenta.monto,
+                    usuario: usuario
+                )
+            } catch {
+                self.error = "Error al marcar cuenta como pagada: \(error.localizedDescription)"
             }
         }
     }
     
     func marcarComoPagada(_ cuentaId: String) {
-        guard let familiaId = familiaId,
+        guard let _ = familiaId,
               let cuentaIndex = cuentas.firstIndex(where: { $0.id == cuentaId }) else { return }
         
         var cuenta = cuentas[cuentaIndex]
@@ -376,11 +396,6 @@ class CuentasViewModel: ObservableObject {
         return Cuenta.CategoriasCuentas.allCases.map { $0.rawValue }
     }
     
-    func eliminarCuenta(id: String) {
-        cuentas.removeAll { $0.id == id }
-        // Aquí se implementaría la persistencia real
-    }
-    
     func marcarComoPagada(_ cuenta: Cuenta, fechaPago: Date = Date(), montoPagado: Double? = nil) {
         if let index = cuentas.firstIndex(where: { $0.id == cuenta.id }) {
             cuentas[index].fechaPago = fechaPago
@@ -421,10 +436,6 @@ class CuentasViewModel: ObservableObject {
         )
         
         cuentas.append(cuentaDuplicada)
-    }
-    
-    func eliminarCuenta(_ cuenta: Cuenta) {
-        cuentas.removeAll { $0.id == cuenta.id }
     }
     
     // MARK: - Organización Temporal
@@ -519,7 +530,7 @@ class CuentasViewModel: ObservableObject {
                     totalMonto: cuentasDelMes.reduce(0) { $0 + $1.monto },
                     cuentasPagadas: cuentasDelMes.filter { $0.estado == .pagada }.count
                 )
-            }
+            }.sorted { $0.mes > $1.mes }
             
             // Ordenar meses cronológicamente inverso (más reciente primero)
             let mesesOrdenados = meses.sorted { mes1, mes2 in
