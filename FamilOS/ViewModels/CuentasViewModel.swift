@@ -123,10 +123,15 @@ class CuentasViewModel: ObservableObject {
         Task {
             do {
                 try await firebaseService.crearCuenta(familiaId: familiaId, cuenta: cuenta)
-                self.isLoading = false
+                await MainActor.run {
+                    self.cargarCuentasFamiliares() // Recargar las cuentas después de agregar
+                    self.isLoading = false
+                }
             } catch {
-                self.error = "Error al agregar cuenta: \(error.localizedDescription)"
-                self.isLoading = false
+                await MainActor.run {
+                    self.error = "Error al agregar cuenta: \(error.localizedDescription)"
+                    self.isLoading = false
+                }
             }
         }
     }
@@ -176,8 +181,12 @@ class CuentasViewModel: ObservableObject {
                     monto: monto ?? cuenta.monto,
                     usuario: usuario
                 )
+                print("✅ Cuenta marcada como pagada: \(cuenta.nombre)")
             } catch {
-                self.error = "Error al marcar cuenta como pagada: \(error.localizedDescription)"
+                await MainActor.run {
+                    self.error = "Error al marcar cuenta como pagada: \(error.localizedDescription)"
+                    print("❌ Error al marcar cuenta como pagada: \(error.localizedDescription)")
+                }
             }
         }
     }
@@ -188,6 +197,8 @@ class CuentasViewModel: ObservableObject {
         
         var cuenta = cuentas[cuentaIndex]
         cuenta.fechaPago = Date()
+        cuenta.estado = .pagada // Asegurar que el estado se actualice
+        cuenta.montoPagado = cuenta.monto // Asumir que se paga el monto completo
         
         actualizarCuenta(cuenta)
     }
@@ -397,15 +408,46 @@ class CuentasViewModel: ObservableObject {
     }
     
     func marcarComoPagada(_ cuenta: Cuenta, fechaPago: Date = Date(), montoPagado: Double? = nil) {
+        guard let familiaId = familiaId else { return }
+        
+        // Actualizar localmente primero para UI responsiva
         if let index = cuentas.firstIndex(where: { $0.id == cuenta.id }) {
             cuentas[index].fechaPago = fechaPago
             cuentas[index].montoPagado = montoPagado ?? cuenta.monto
             cuentas[index].estado = .pagada
         }
+        
+        // Sincronizar con Firebase
+        Task {
+            do {
+                try await firebaseService.registrarPagoCuenta(
+                    familiaId: familiaId,
+                    cuentaId: cuenta.id,
+                    monto: montoPagado ?? cuenta.monto,
+                    usuario: "Usuario",
+                    fecha: fechaPago
+                )
+                
+                // Recargar las cuentas para asegurar sincronización
+                await cargarCuentasFamiliares()
+                
+            } catch {
+                await MainActor.run {
+                    self.error = "Error al marcar cuenta como pagada: \(error.localizedDescription)"
+                    // Revertir cambios locales si falló la sincronización
+                    if let index = self.cuentas.firstIndex(where: { $0.id == cuenta.id }) {
+                        self.cuentas[index] = cuenta // Revertir al estado original
+                    }
+                }
+            }
+        }
     }
     
     // MARK: - Gestión de Pagos
     func registrarPago(cuenta: Cuenta, monto: Double, fecha: Date, notas: String, tieneComprobante: Bool) {
+        guard let familiaId = familiaId else { return }
+        
+        // Actualizar localmente primero para UI responsiva
         if let index = cuentas.firstIndex(where: { $0.id == cuenta.id }) {
             cuentas[index].estado = .pagada
             cuentas[index].montoPagado = monto
@@ -415,6 +457,55 @@ class CuentasViewModel: ObservableObject {
             if tieneComprobante {
                 // Simular URL de comprobante
                 cuentas[index].comprobanteURL = URL(string: "file://comprobante_\(cuenta.id)")
+            }
+        }
+        
+        // Sincronizar con Firebase
+        Task {
+            do {
+                // Registrar el pago en Firebase (esto actualiza el estado automáticamente)
+                try await firebaseService.registrarPagoCuenta(
+                    familiaId: familiaId,
+                    cuentaId: cuenta.id,
+                    monto: monto,
+                    usuario: "Usuario",
+                    fecha: fecha
+                )
+                
+                // Crear cuenta actualizada con toda la información
+                var cuentaActualizada = cuenta
+                cuentaActualizada.estado = .pagada
+                cuentaActualizada.montoPagado = monto
+                cuentaActualizada.fechaPago = fecha
+                
+                // Actualizar descripción si hay notas
+                if !notas.isEmpty {
+                    cuentaActualizada.descripcion = notas.isEmpty ? cuenta.descripcion : "\(cuenta.descripcion)\n\nNotas de pago: \(notas)"
+                }
+                
+                // Agregar comprobante si existe
+                if tieneComprobante {
+                    cuentaActualizada.comprobanteURL = URL(string: "file://comprobante_\(cuenta.id)")
+                }
+                
+                // Actualizar la cuenta completa en Firebase
+                try await firebaseService.actualizarCuenta(familiaId: familiaId, cuenta: cuentaActualizada)
+                
+                print("✅ Pago registrado exitosamente para cuenta: \(cuenta.nombre)")
+                
+                // La recarga de cuentas no es necesaria aquí porque el observador de Firebase
+                // se encargará de actualizar automáticamente las cuentas cuando cambien en la base de datos
+                
+            } catch {
+                await MainActor.run {
+                    self.error = "Error al registrar pago: \(error.localizedDescription)"
+                    print("❌ Error al registrar pago: \(error.localizedDescription)")
+                    
+                    // Revertir cambios locales si falló la sincronización
+                    if let index = self.cuentas.firstIndex(where: { $0.id == cuenta.id }) {
+                        self.cuentas[index] = cuenta // Revertir al estado original
+                    }
+                }
             }
         }
     }

@@ -1,0 +1,78 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "usuarios": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid",
+        ".validate": "auth != null"
+      }
+    },
+    "familias": {
+      ".read": false,
+      ".write": false,
+      "$familiaId": {
+        ".read": "auth != null && (root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists() || root.child('familias').child($familiaId).child('adminId').val() === auth.uid)",
+        ".write": "auth != null && (!root.child('familias').child($familiaId).exists() || root.child('familias').child($familiaId).child('adminId').val() === auth.uid || root.child('familias').child($familiaId).child('miembros').child(auth.uid).child('rol').val() === 'admin')",
+        "miembros": {
+          ".read": "auth != null && (root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists() || root.child('familias').child($familiaId).child('adminId').val() === auth.uid)",
+          ".write": "auth != null && (root.child('familias').child($familiaId).child('adminId').val() === auth.uid || root.child('familias').child($familiaId).child('miembros').child(auth.uid).child('rol').val() === 'admin')",
+          "$uid": {
+            ".validate": "auth != null"
+          }
+        },
+        "cuentas": {
+          ".read": "auth != null && (root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists() || root.child('familias').child($familiaId).child('adminId').val() === auth.uid)",
+          ".write": "auth != null && (root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists() || root.child('familias').child($familiaId).child('adminId').val() === auth.uid)",
+          "$cuentaId": {
+            ".validate": "auth != null && newData.hasChildren(['id', 'monto', 'proveedor', 'fechaVencimiento', 'categoria', 'creador', 'nombre', 'estado']) && newData.child('id').isString() && newData.child('monto').isNumber() && newData.child('proveedor').isString() && newData.child('categoria').isString() && newData.child('creador').isString() && newData.child('nombre').isString() && newData.child('estado').isString()",
+            ".indexOn": ["categoria", "fechaVencimiento", "estado", "creador"]
+          }
+        },
+        "presupuestos": {
+          ".read": "auth != null && (root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists() || root.child('familias').child($familiaId).child('adminId').val() === auth.uid)",
+          ".write": "auth != null && (root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists() || root.child('familias').child($familiaId).child('adminId').val() === auth.uid)",
+          "$presupuestoId": {
+            ".validate": "auth != null && newData.hasChildren(['id', 'fechaMes', 'creador']) && newData.child('id').isString() && newData.child('fechaMes').isNumber() && newData.child('creador').isString()",
+            ".indexOn": ["fechaMes", "creador"]
+          }
+        },
+        "aportes": {
+          ".read": "auth != null && (root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists() || root.child('familias').child($familiaId).child('adminId').val() === auth.uid)",
+          ".write": "auth != null && (root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists() || root.child('familias').child($familiaId).child('adminId').val() === auth.uid)",
+          "$aporteId": {
+            ".validate": "auth != null && newData.hasChildren(['id', 'presupuestoId', 'usuario', 'monto', 'fecha']) && newData.child('id').isString() && newData.child('presupuestoId').isString() && newData.child('usuario').isString() && newData.child('monto').isNumber() && newData.child('fecha').isNumber() && (!newData.hasChild('comentario') || newData.child('comentario').isString())",
+            ".indexOn": ["presupuestoId", "usuario", "fecha"]
+          }
+        },
+        "deudas": {
+          ".read": "auth != null && (root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists() || root.child('familias').child($familiaId).child('adminId').val() === auth.uid)",
+          ".write": "auth != null && (root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists() || root.child('familias').child($familiaId).child('adminId').val() === auth.uid)",
+          "$deudaId": {
+            ".validate": "auth != null && newData.hasChildren(['id', 'presupuestoId', 'categoria', 'montoTotal']) && newData.child('id').isString() && newData.child('presupuestoId').isString() && newData.child('categoria').isString() && newData.child('montoTotal').isNumber()",
+            ".indexOn": ["presupuestoId", "categoria"]
+          }
+        },
+        "transacciones": {
+          ".read": "auth != null && (root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists() || root.child('familias').child($familiaId).child('adminId').val() === auth.uid)",
+          ".write": "auth != null && (root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists() || root.child('familias').child($familiaId).child('adminId').val() === auth.uid)",
+          "$transaccionId": {
+            ".validate": "auth != null && newData.hasChildren(['id', 'monto', 'descripcion']) && newData.child('id').isString() && newData.child('monto').isNumber() && newData.child('descripcion').isString()",
+            ".indexOn": ["fecha", "categoria"]
+          }
+        }
+      }
+    },
+    "invitaciones": {
+      "$invitacionId": {
+        ".read": "auth != null && (data.child('invitadoEmail').val() === root.child('usuarios').child(auth.uid).child('email').val() || data.child('invitadoPor').val() === auth.uid)",
+        ".write": "auth != null && (data.child('invitadoEmail').val() === root.child('usuarios').child(auth.uid).child('email').val() || data.child('invitadoPor').val() === auth.uid)"
+      }
+    },
+    "test": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}

@@ -22,22 +22,26 @@
         },
         "cuentas": {
           "$cuentaId": {
-            ".validate": "auth != null"
+            ".validate": "auth != null && newData.hasChildren(['id', 'monto', 'proveedor', 'fechaVencimiento', 'categoria', 'creador', 'nombre', 'estado']) && newData.child('id').isString() && newData.child('monto').isNumber() && newData.child('proveedor').isString() && newData.child('categoria').isString() && newData.child('creador').isString() && newData.child('nombre').isString() && newData.child('estado').isString()",
+            ".indexOn": ["categoria", "fechaVencimiento", "estado", "creador"]
           }
         },
         "presupuestos": {
           "$presupuestoId": {
-            ".validate": "auth != null"
+            ".validate": "auth != null && newData.hasChildren(['id', 'fechaMes', 'creador']) && newData.child('id').isString() && newData.child('fechaMes').isNumber() && newData.child('creador').isString()",
+            ".indexOn": ["fechaMes", "creador"]
           }
         },
         "aportes": {
           "$aporteId": {
-            ".validate": "auth != null"
+            ".validate": "auth != null && newData.hasChildren(['id', 'presupuestoId', 'usuario', 'monto', 'fecha']) && newData.child('id').isString() && newData.child('presupuestoId').isString() && newData.child('usuario').isString() && newData.child('monto').isNumber() && newData.child('fecha').isNumber()",
+            ".indexOn": ["presupuestoId", "usuario", "fecha"]
           }
         },
         "deudas": {
           "$deudaId": {
-            ".validate": "auth != null"
+            ".validate": "auth != null && newData.hasChildren(['id', 'presupuestoId', 'categoria', 'montoTotal']) && newData.child('id').isString() && newData.child('presupuestoId').isString() && newData.child('categoria').isString() && newData.child('montoTotal').isNumber()",
+            ".indexOn": ["presupuestoId", "categoria"]
           }
         }
       }

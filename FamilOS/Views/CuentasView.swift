@@ -2596,20 +2596,20 @@ struct NuevaCuentaView: View {
     // MARK: - Formulario
     private var formularioSection: some View {
         VStack(spacing: 20) {
-            // Información básica
-            seccionFormulario(titulo: "Información Básica", icono: "info.circle") {
-                VStack(spacing: 16) {
-                    campoTexto("Nombre (opcional)", texto: $nombre, placeholder: "Nombre descriptivo")
-                    campoMonto("Monto", valor: $monto)
-                }
-            }
-            
-            // Categoría y Proveedor
+            // Categoría y Proveedor - Sección principal
             seccionFormulario(titulo: "Categoría y Proveedor", icono: "tag") {
                 SelectorCategoriaProveedor(
                     categoriaSeleccionada: $categoriaSeleccionada,
                     proveedorSeleccionado: $proveedorSeleccionado
                 )
+            }
+            
+            // Información básica
+            seccionFormulario(titulo: "Información Básica", icono: "info.circle") {
+                VStack(spacing: 16) {
+                    campoMonto("Monto", valor: $monto)
+                    campoTexto("Nombre (opcional)", texto: $nombre, placeholder: "Nombre descriptivo - se genera automáticamente si está vacío")
+                }
             }
             
             // Fechas

@@ -6,11 +6,11 @@ struct ContentView: View {
     
     var body: some View {
         Group {
-            if authViewModel.isAuthenticated && authViewModel.familiaActual != nil {
+            if authViewModel.isAuthenticated && authViewModel.familiaActual != nil && !authViewModel.needsFamilySetup {
                 MainTabView()
                     .environmentObject(authViewModel)
-            } else if authViewModel.isAuthenticated && authViewModel.familiaActual == nil {
-                ConfiguracionFamiliarView()
+            } else if authViewModel.isAuthenticated && authViewModel.needsFamilySetup {
+                OnboardingFamiliarView()
                     .environmentObject(authViewModel)
             } else {
                 LoginView()

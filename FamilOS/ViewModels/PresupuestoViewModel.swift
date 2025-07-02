@@ -127,8 +127,8 @@ class PresupuestoViewModel: ObservableObject {
     // MARK: - Nuevas propiedades para integración con cuentas
     @Published var presupuestosPorCategoria: [String: Double] = [:]
     private var cuentasViewModel: CuentasViewModel?
-    private let firebaseService = FirebaseService()
-    private var familiaId: String?
+    let firebaseService = FirebaseService() // Cambiado a público para acceso desde vistas
+    var familiaId: String? // Cambiado a público para acceso desde vistas
     
     // MARK: - Configuración
     
@@ -225,7 +225,14 @@ class PresupuestoViewModel: ObservableObject {
     }
     
     func agregarAporte(_ aporte: Aporte) {
-        guard let familiaId = familiaId else { return }
+        guard let familiaId = familiaId else { 
+            print("❌ Error: familiaId es nil en agregarAporte")
+            return 
+        }
+        
+        print("📊 Iniciando agregarAporte:")
+        print("   - FamiliaId: \(familiaId)")
+        print("   - Aporte: \(aporte)")
         
         isLoading = true
         error = nil
@@ -233,11 +240,23 @@ class PresupuestoViewModel: ObservableObject {
         Task {
             do {
                 try await firebaseService.crearAporte(familiaId: familiaId, aporte: aporte)
-                await cargarAportes(presupuestoId: aporte.presupuestoId)
-                self.isLoading = false
+                await cargarDatosFamiliares() // Cargar todos los datos para refrescar la vista
+                await MainActor.run {
+                    self.isLoading = false
+                    print("✅ Aporte agregado exitosamente")
+                }
             } catch {
-                self.error = "Error al agregar aporte: \(error.localizedDescription)"
-                self.isLoading = false
+                await MainActor.run {
+                    self.error = "Error al agregar aporte: \(error.localizedDescription)"
+                    self.isLoading = false
+                    print("❌ Firebase Error en agregarAporte:")
+                    print("   - Descripción: \(error.localizedDescription)")
+                    if let nsError = error as NSError? {
+                        print("   - Código: \(nsError.code)")
+                        print("   - Dominio: \(nsError.domain)")
+                        print("   - UserInfo: \(nsError.userInfo)")
+                    }
+                }
             }
         }
     }

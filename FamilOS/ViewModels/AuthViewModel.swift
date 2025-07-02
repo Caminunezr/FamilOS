@@ -16,6 +16,7 @@ class AuthViewModel: ObservableObject {
     @Published var mostrarRegistro: Bool = false
     @Published var mostrarCreacionFamilia: Bool = false
     @Published var mostrarUnirseFamilia: Bool = false
+    @Published var needsFamilySetup: Bool = false // Nueva propiedad para el onboarding
     @Published var networkStatus: NWPath.Status = .satisfied
     
     private let firebaseService = FirebaseService()
@@ -106,7 +107,10 @@ class AuthViewModel: ObservableObject {
                 self.miembroFamiliar = miembro
                 
                 if familia == nil {
-                    print("ℹ️ Usuario sin familia asignada")
+                    print("ℹ️ Usuario sin familia asignada - mostrando onboarding")
+                    self.needsFamilySetup = true
+                } else {
+                    self.needsFamilySetup = false
                 }
             }
         } catch {
@@ -115,6 +119,7 @@ class AuthViewModel: ObservableObject {
             await MainActor.run {
                 self.familiaActual = nil
                 self.miembroFamiliar = nil
+                self.needsFamilySetup = true
             }
         }
     }
@@ -323,6 +328,107 @@ class AuthViewModel: ObservableObject {
                 }
                 print("❌ Error en registro: \(error)")
             }
+        }
+    }
+    
+    // MARK: - Métodos para Onboarding Familiar
+    
+    /// Crear una nueva familia (para el onboarding)
+    @MainActor
+    func crearFamilia(nombre: String, descripcion: String = "") async {
+        guard let usuario = usuarioActual else {
+            error = "Usuario no encontrado"
+            return
+        }
+        
+        error = nil
+        
+        do {
+            // Crear la familia
+            let familia = Familia(
+                nombre: nombre,
+                descripcion: descripcion,
+                adminId: usuario.id
+            )
+            
+            // Crear miembro admin
+            let miembroAdmin = MiembroFamilia(
+                id: usuario.id,
+                nombre: usuario.nombre,
+                email: usuario.email,
+                rol: .admin,
+                familiaId: familia.id
+            )
+            
+            // Guardar en Firebase
+            try await firebaseService.crearFamilia(familia, miembroAdmin: miembroAdmin)
+            
+            // Actualizar estado local
+            self.familiaActual = familia
+            self.miembroFamiliar = miembroAdmin
+            self.needsFamilySetup = false
+            
+            print("✅ Familia creada exitosamente: \(familia.nombre)")
+            
+        } catch {
+            self.error = "Error al crear la familia: \(error.localizedDescription)"
+            print("❌ Error creando familia: \(error)")
+        }
+    }
+    
+    /// Unirse a una familia usando código de invitación (para el onboarding)
+    @MainActor
+    func unirseFamiliaConCodigo(codigo: String) async {
+        guard let usuario = usuarioActual else {
+            error = "Usuario no encontrado"
+            return
+        }
+        
+        error = nil
+        
+        do {
+            // Buscar la invitación por código
+            if let invitacion = try await firebaseService.buscarInvitacionPorCodigo(codigo) {
+                
+                // Verificar que la invitación no haya expirado
+                if invitacion.fechaExpiracion > Date() {
+                    
+                    // Crear el miembro de la familia
+                    let miembro = MiembroFamilia(
+                        id: usuario.id,
+                        nombre: usuario.nombre,
+                        email: usuario.email,
+                        rol: .miembro,
+                        familiaId: invitacion.familiaId
+                    )
+                    
+                    // Agregar el miembro a la familia
+                    try await firebaseService.agregarMiembroFamilia(familiaId: invitacion.familiaId, miembro: miembro)
+                    
+                    // Eliminar la invitación usada
+                    try await firebaseService.eliminarInvitacion(invitacion.id)
+                    
+                    // Cargar datos de la familia
+                    let familia = try await firebaseService.obtenerFamilia(familiaId: invitacion.familiaId)
+                    
+                    // Actualizar estado local
+                    self.familiaActual = familia
+                    self.miembroFamiliar = miembro
+                    self.needsFamilySetup = false
+                    
+                    print("✅ Usuario unido exitosamente a la familia: \(familia.nombre)")
+                    
+                } else {
+                    self.error = "El código de invitación ha expirado"
+                }
+                
+            } else {
+                self.error = "Código de invitación inválido"
+            }
+            
+        } catch {
+            self.error = "Error al unirse a la familia: \(error.localizedDescription)"
+            print("❌ Error uniéndose a familia: \(error)")
         }
     }
     

@@ -139,6 +139,68 @@ class FirebaseService: ObservableObject {
         }
     }
     
+    // Método simplificado para crear familia con miembro admin (para onboarding)
+    func crearFamilia(_ familia: Familia, miembroAdmin: MiembroFamilia) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            do {
+                print("🏠 Creando familia (onboarding): \(familia.nombre)")
+                print("👤 Admin: \(miembroAdmin.nombre)")
+                
+                // Preparar datos de la familia
+                let familiaData = try jsonEncoder.encode(familia)
+                var familiaDict = try JSONSerialization.jsonObject(with: familiaData) as? [String: Any] ?? [:]
+                
+                // Preparar datos del administrador
+                let adminData = try jsonEncoder.encode(miembroAdmin)
+                let adminDict = try JSONSerialization.jsonObject(with: adminData) as? [String: Any] ?? [:]
+                
+                // Agregar el administrador a la familia
+                familiaDict["miembros"] = [miembroAdmin.id: adminDict]
+                
+                // Crear familia y usuario en paralelo
+                let group = DispatchGroup()
+                var error: Error?
+                
+                // Escribir familia
+                group.enter()
+                database.child("familias").child(familia.id).setValue(familiaDict) { err, _ in
+                    if let err = err {
+                        error = err
+                        print("❌ Error creando familia: \(err)")
+                    } else {
+                        print("✅ Familia creada en Firebase")
+                    }
+                    group.leave()
+                }
+                
+                // Actualizar usuario con familiaId
+                group.enter()
+                database.child("usuarios").child(miembroAdmin.id).child("familiaId").setValue(familia.id) { err, _ in
+                    if let err = err {
+                        error = err
+                        print("❌ Error actualizando usuario: \(err)")
+                    } else {
+                        print("✅ Usuario actualizado con familiaId")
+                    }
+                    group.leave()
+                }
+                
+                group.notify(queue: .main) {
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        print("🎉 Familia y miembro admin creados exitosamente")
+                        continuation.resume(returning: ())
+                    }
+                }
+                
+            } catch {
+                print("❌ Error en preparación de datos: \(error.localizedDescription)")
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+    
     func obtenerFamilia(familiaId: String) async throws -> Familia {
         return try await withCheckedThrowingContinuation { continuation in
             database.child("familias").child(familiaId).observeSingleEvent(of: .value) { [self] snapshot in
@@ -251,7 +313,9 @@ class FirebaseService: ObservableObject {
                     if let cuentaDict = cuentaData as? [String: Any] {
                         do {
                             let jsonData = try JSONSerialization.data(withJSONObject: cuentaDict)
-                            let cuenta = try jsonDecoder.decode(Cuenta.self, from: jsonData)
+                            var cuenta = try jsonDecoder.decode(Cuenta.self, from: jsonData)
+                            // Recalcular el estado después de la decodificación para asegurar consistencia
+                            cuenta.recalcularEstado()
                             cuentas.append(cuenta)
                         } catch {
                             print("Error decodificando cuenta: \(error)")
@@ -316,7 +380,9 @@ class FirebaseService: ObservableObject {
                 if let cuentaDict = cuentaData as? [String: Any] {
                     do {
                         let jsonData = try JSONSerialization.data(withJSONObject: cuentaDict)
-                        let cuenta = try jsonDecoder.decode(Cuenta.self, from: jsonData)
+                        var cuenta = try jsonDecoder.decode(Cuenta.self, from: jsonData)
+                        // Recalcular el estado después de la decodificación para asegurar consistencia
+                        cuenta.recalcularEstado()
                         cuentas.append(cuenta)
                     } catch {
                         print("Error decodificando cuenta en observador: \(error)")
@@ -425,16 +491,57 @@ class FirebaseService: ObservableObject {
     func crearAporte(familiaId: String, aporte: Aporte) async throws {
         return try await withCheckedThrowingContinuation { continuation in
             do {
+                print("📊 Creando aporte:")
+                print("   - FamiliaId: \(familiaId)")
+                print("   - AporteId: \(aporte.id)")
+                print("   - Usuario: \(aporte.usuario)")
+                print("   - Monto: \(aporte.monto)")
+                print("   - Fecha: \(aporte.fecha)")
+                print("   - PresupuestoId: \(aporte.presupuestoId)")
+                print("   - Comentario: '\(aporte.comentario)'")
+                
                 let aporteData = try jsonEncoder.encode(aporte)
                 let aporteDict = try JSONSerialization.jsonObject(with: aporteData) as? [String: Any] ?? [:]
+                
+                print("📊 Datos serializados del aporte:")
+                for (key, value) in aporteDict {
+                    print("   - \(key): \(value) (tipo: \(type(of: value)))")
+                }
+                
+                // Verificar estructura de datos antes de enviar
+                let pathCompleto = "familias/\(familiaId)/aportes/\(aporte.id)"
+                print("📊 Path completo a Firebase: \(pathCompleto)")
+                
+                // Verificar que tenemos autenticación
+                if let currentUser = Auth.auth().currentUser {
+                    print("📊 Usuario autenticado: \(currentUser.uid)")
+                } else {
+                    print("❌ No hay usuario autenticado!")
+                    continuation.resume(throwing: NSError(domain: "FirebaseAuth", code: -1, userInfo: [NSLocalizedDescriptionKey: "Usuario no autenticado"]))
+                    return
+                }
                 
                 database.child("familias").child(familiaId).child("aportes").child(aporte.id).setValue(aporteDict) { error, _ in
                     if let error = error {
                         print("❌ Error al crear aporte: \(error.localizedDescription)")
+                        if let nsError = error as NSError? {
+                            print("   - Código: \(nsError.code)")
+                            print("   - Dominio: \(nsError.domain)")
+                            print("   - UserInfo: \(nsError.userInfo)")
+                            
+                            // Logs específicos para errores de reglas
+                            if nsError.domain == "FirebaseDatabase" {
+                                print("   - Error específico de Firebase Database")
+                                if nsError.code == 1 {
+                                    print("   - Código 1: Probablemente problema de permisos/reglas")
+                                }
+                            }
+                        }
                         self.logFirebaseError(error, operation: "crearAporte")
                         continuation.resume(throwing: error)
                     } else {
                         print("✅ Aporte creado exitosamente: $\(aporte.monto)")
+                        print("✅ Path utilizado: familias/\(familiaId)/aportes/\(aporte.id)")
                         continuation.resume(returning: ())
                     }
                 }
@@ -642,6 +749,20 @@ class FirebaseService: ObservableObject {
         }
     }
     
+    func eliminarInvitacion(_ invitacionId: String) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            database.child("invitaciones").child(invitacionId).removeValue { error, _ in
+                if let error = error {
+                    print("❌ Error al eliminar invitación: \(error.localizedDescription)")
+                    continuation.resume(throwing: error)
+                } else {
+                    print("✅ Invitación eliminada exitosamente")
+                    continuation.resume(returning: ())
+                }
+            }
+        }
+    }
+    
     // MARK: - Error Handling Helpers
     
     private func logFirebaseError(_ error: Error, operation: String) {
@@ -754,7 +875,7 @@ class FirebaseService: ObservableObject {
         return try await withCheckedThrowingContinuation { continuation in
             // Actualizar cuenta y crear transacción en una sola operación
             let updates: [String: Any] = [
-                "familias/\(familiaId)/cuentas/\(cuentaId)/estado": "pagada",
+                "familias/\(familiaId)/cuentas/\(cuentaId)/estado": "Pagada",
                 "familias/\(familiaId)/cuentas/\(cuentaId)/fechaPago": fecha.timeIntervalSince1970,
                 "familias/\(familiaId)/cuentas/\(cuentaId)/montoPagado": monto,
                 "familias/\(familiaId)/transacciones/\(transaccion["id"] as! String)": transaccion

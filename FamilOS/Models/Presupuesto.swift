@@ -22,7 +22,22 @@ struct Aporte: Identifiable, Codable {
     var usuario: String
     var monto: Double
     var comentario: String = ""
-    var fecha: Date = Date()
+    var fecha: TimeInterval = Date().timeIntervalSince1970
+    
+    // Computed property para trabajar con Date en la UI
+    var fechaDate: Date {
+        get { Date(timeIntervalSince1970: fecha) }
+        set { fecha = newValue.timeIntervalSince1970 }
+    }
+    
+    // Inicializadores para compatibilidad
+    init(presupuestoId: String, usuario: String, monto: Double, comentario: String = "") {
+        self.presupuestoId = presupuestoId
+        self.usuario = usuario
+        self.monto = monto
+        self.comentario = comentario
+        self.fecha = Date().timeIntervalSince1970
+    }
 }
 
 struct DeudaPresupuesto: Identifiable, Codable {

@@ -141,4 +141,24 @@ extension Cuenta {
     var iconoProveedor: String {
         return proveedor.iconoProveedor
     }
+    
+    // MARK: - Métodos de estado
+    
+    /// Recalcula el estado de la cuenta basado en la fecha de pago y vencimiento
+    mutating func recalcularEstado() {
+        if fechaPago != nil {
+            self.estado = .pagada
+        } else if fechaVencimiento < Date() {
+            self.estado = .vencida
+        } else {
+            self.estado = .pendiente
+        }
+    }
+    
+    /// Marca la cuenta como pagada con la fecha y monto especificados
+    mutating func marcarComoPagada(fecha: Date = Date(), monto: Double? = nil) {
+        self.fechaPago = fecha
+        self.montoPagado = monto ?? self.monto
+        self.estado = .pagada
+    }
 }
