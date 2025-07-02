@@ -8,6 +8,7 @@ struct DashboardIntegradoView: View {
     @State private var resumenActual: ResumenFinancieroIntegrado?
     @State private var mostrarConfiguracion = false
     @State private var mostrarConfiguracionCategorias = false
+    @State private var mostrarTestModal = false
     // @State private var categoriaSeleccionada: CategoriaFinanciera?
     
     var body: some View {
@@ -51,6 +52,10 @@ struct DashboardIntegradoView: View {
                         Button(action: { mostrarConfiguracionCategorias = true }) {
                             Label("Gestionar Categorías", systemImage: "folder.badge.gearshape")
                         }
+                        
+                        Button(action: { mostrarTestModal = true }) {
+                            Label("Probar Modal Pago (DEBUG)", systemImage: "exclamationmark.triangle")
+                        }
                     } label: {
                         Image(systemName: "gearshape.fill")
                             .foregroundColor(.blue)
@@ -67,6 +72,19 @@ struct DashboardIntegradoView: View {
         }
         .sheet(isPresented: $mostrarConfiguracionCategorias) {
             ConfiguracionCategoriasView()
+        }
+        .sheet(isPresented: $mostrarTestModal) {
+            ModalRegistrarPagoAvanzado(
+                cuenta: Cuenta(
+                    monto: 1000.0,
+                    proveedor: "Test Provider",
+                    fechaVencimiento: Date(),
+                    categoria: "Test",
+                    creador: "Usuario Test"
+                ),
+                cuentasViewModel: cuentasViewModel,
+                presupuestoViewModel: presupuestoViewModel
+            )
         }
         /*
         .sheet(item: $categoriaSeleccionada) { categoria in
@@ -352,7 +370,7 @@ struct DashboardIntegradoView: View {
                 .foregroundColor(.secondary)
                 .frame(width: 16)
             
-            Image(systemName: categoria.icono)
+            Image(systemName: categoria.icon)
                 .foregroundColor(CategoriaFinanciera(rawValue: categoria.nombre)?.colorPrimario ?? .blue)
                 .frame(width: 16)
             
@@ -411,7 +429,7 @@ struct CategoriaAnalisisCard: View {
     var body: some View {
         VStack(spacing: 12) {
             HStack {
-                Image(systemName: categoria.icono)
+                Image(systemName: categoria.icon)
                     .foregroundColor(categoria.estado.color)
                     .font(.title3)
                 

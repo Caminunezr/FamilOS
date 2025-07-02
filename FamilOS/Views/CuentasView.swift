@@ -3,6 +3,7 @@ import Combine
 
 struct CuentasView: View {
     @EnvironmentObject var viewModel: CuentasViewModel
+    @EnvironmentObject var presupuestoViewModel: PresupuestoViewModel
     @State private var mostrarFormularioNuevaCuenta = false
     @State private var cuentaSeleccionada: Cuenta? = nil
     @State private var mostrarFiltrosAvanzados = false
@@ -13,7 +14,7 @@ struct CuentasView: View {
             dashboardSidebar
         } detail: {
             if let cuenta = cuentaSeleccionada {
-                CuentaDetalleView(cuenta: cuenta, viewModel: viewModel, cuentaSeleccionada: $cuentaSeleccionada)
+                CuentaDetalleView(cuenta: cuenta, viewModel: viewModel, presupuestoViewModel: presupuestoViewModel, cuentaSeleccionada: $cuentaSeleccionada)
             } else {
                 dashboardPrincipal
             }
@@ -951,6 +952,7 @@ struct CuentaItemView: View {
 struct CuentaDetalleView: View {
     let cuenta: Cuenta
     @ObservedObject var viewModel: CuentasViewModel
+    @ObservedObject var presupuestoViewModel: PresupuestoViewModel
     @Binding var cuentaSeleccionada: Cuenta?
     @State private var mostrarFormularioPago = false
     @State private var mostrarVisorArchivos = false
@@ -978,7 +980,7 @@ struct CuentaDetalleView: View {
         }
         .navigationTitle("Detalles de Cuenta")
         .sheet(isPresented: $mostrarFormularioPago) {
-            FormularioPagoView(cuenta: cuenta, viewModel: viewModel)
+            ModalRegistrarPagoAvanzado(cuenta: cuenta, cuentasViewModel: viewModel, presupuestoViewModel: presupuestoViewModel)
         }
         .sheet(isPresented: $mostrarVisorArchivos) {
             VisorArchivosView(cuenta: cuenta)

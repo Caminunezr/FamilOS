@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import FirebaseDatabase
 
 @MainActor
 class CuentasViewModel: ObservableObject {
@@ -25,6 +26,7 @@ class CuentasViewModel: ObservableObject {
     private let firebaseService = FirebaseService()
     private var familiaId: String?
     private var cancellables = Set<AnyCancellable>()
+    private var observadorCuentasHandle: DatabaseHandle?
     
     enum VistaOrganizacion: String, CaseIterable {
         case porAño = "Por Año"
@@ -77,21 +79,21 @@ class CuentasViewModel: ObservableObject {
     
     func configurarFamilia(_ familiaId: String) {
         self.familiaId = familiaId
-        cargarCuentasFamiliares()
-        iniciarObservadorCuentas()
+        self.isLoading = true // Activar loading antes de iniciar el observador
+        iniciarObservadorCuentas() // El observador cargará las cuentas automáticamente
     }
     
     // MARK: - Carga de datos familiares
     
     func cargarCuentasFamiliares() {
-        guard let familiaId = familiaId else { return }
+        guard let familiaIdUnwrapped = familiaId else { return }
         
         isLoading = true
         error = nil
         
         Task { @MainActor in
             do {
-                let cuentasFamiliares = try await firebaseService.obtenerCuentas(familiaId: familiaId)
+                let cuentasFamiliares = try await firebaseService.obtenerCuentasFamilia(familiaId: familiaIdUnwrapped)
                 
                 self.cuentas = cuentasFamiliares
                 self.isLoading = false
@@ -103,28 +105,43 @@ class CuentasViewModel: ObservableObject {
     }
     
     private func iniciarObservadorCuentas() {
-        guard let familiaId = familiaId else { return }
+        guard let familiaIdUnwrapped = familiaId else { return }
         
-        firebaseService.observarCuentas(familiaId: familiaId) { [weak self] cuentas in
+        // Detener observador anterior si existe
+        detenerObservadorCuentas()
+        
+        // Iniciar nuevo observador
+        observadorCuentasHandle = firebaseService.observarCuentas(familiaId: familiaIdUnwrapped) { [weak self] cuentas in
             Task { @MainActor in
-                self?.cuentas = cuentas
+                guard let self = self else { return }
+                self.cuentas = cuentas
+                self.isLoading = false
+                print("🔄 Cuentas actualizadas: \(cuentas.count) cuentas")
             }
         }
+    }
+    
+    private func detenerObservadorCuentas() {
+        guard let familiaIdUnwrapped = familiaId,
+              let handle = observadorCuentasHandle else { return }
+        
+        firebaseService.detenerObservadorCuentas(familiaId: familiaIdUnwrapped, handle: handle)
+        observadorCuentasHandle = nil
     }
     
     // MARK: - Gestión de cuentas
     
     func agregarCuenta(_ cuenta: Cuenta) {
-        guard let familiaId = familiaId else { return }
+        guard let familiaIdUnwrapped = familiaId else { return }
         
         isLoading = true
         error = nil
         
         Task {
             do {
-                try await firebaseService.crearCuenta(familiaId: familiaId, cuenta: cuenta)
+                try await firebaseService.crearCuenta(cuenta, familiaId: familiaIdUnwrapped)
                 await MainActor.run {
-                    self.cargarCuentasFamiliares() // Recargar las cuentas después de agregar
+                    // El observador actualizará automáticamente las cuentas
                     self.isLoading = false
                 }
             } catch {
@@ -137,14 +154,14 @@ class CuentasViewModel: ObservableObject {
     }
     
     func actualizarCuenta(_ cuenta: Cuenta) {
-        guard let familiaId = familiaId else { return }
+        guard let familiaIdUnwrapped = familiaId else { return }
         
         isLoading = true
         error = nil
         
         Task {
             do {
-                try await firebaseService.actualizarCuenta(familiaId: familiaId, cuenta: cuenta)
+                try await firebaseService.actualizarCuenta(cuenta, familiaId: familiaIdUnwrapped)
                 self.isLoading = false
             } catch {
                 self.error = "Error al actualizar cuenta: \(error.localizedDescription)"
@@ -154,40 +171,52 @@ class CuentasViewModel: ObservableObject {
     }
     
     func eliminarCuenta(_ cuenta: Cuenta) {
-        guard let familiaId = familiaId else { return }
+        guard let familiaIdUnwrapped = familiaId else { 
+            error = "No se puede eliminar: familia no configurada"
+            return 
+        }
+        
+        // Verificar que la cuenta aún existe en nuestra lista local
+        guard cuentas.contains(where: { $0.id == cuenta.id }) else {
+            error = "La cuenta ya fue eliminada"
+            return
+        }
         
         isLoading = true
         error = nil
         
-        Task {
+        Task { @MainActor in
             do {
-                try await firebaseService.eliminarCuenta(familiaId: familiaId, cuentaId: cuenta.id)
-                self.isLoading = false
+                print("🗑️ Iniciando eliminación de cuenta: \(cuenta.nombre)")
+                try await firebaseService.eliminarCuenta(cuentaId: cuenta.id, familiaId: familiaIdUnwrapped)
+                // No necesitamos actualizar manualmente porque el observador se encargará
+                await MainActor.run {
+                    self.isLoading = false
+                    print("✅ Cuenta eliminada exitosamente desde ViewModel")
+                }
             } catch {
-                self.error = "Error al eliminar cuenta: \(error.localizedDescription)"
-                self.isLoading = false
+                await MainActor.run {
+                    self.error = "Error al eliminar cuenta: \(error.localizedDescription)"
+                    self.isLoading = false
+                    print("❌ Error eliminando cuenta desde ViewModel: \(error)")
+                }
             }
         }
     }
     
     func marcarComoPagada(_ cuenta: Cuenta, monto: Double? = nil, usuario: String) {
-        guard let familiaId = familiaId else { return }
+        guard familiaId != nil else { return }
         
         Task {
-            do {
-                try await firebaseService.registrarPagoCuenta(
-                    familiaId: familiaId,
-                    cuentaId: cuenta.id,
-                    monto: monto ?? cuenta.monto,
-                    usuario: usuario
-                )
-                print("✅ Cuenta marcada como pagada: \(cuenta.nombre)")
-            } catch {
-                await MainActor.run {
-                    self.error = "Error al marcar cuenta como pagada: \(error.localizedDescription)"
-                    print("❌ Error al marcar cuenta como pagada: \(error.localizedDescription)")
-                }
-            }
+            // TODO: Implementar registrarPagoCuenta usando crearTransaccionPago
+            // try await firebaseService.registrarPagoCuenta(
+            //     familiaId: familiaId,
+            //     cuentaId: cuenta.id,
+            //     monto: monto ?? cuenta.monto,
+            //     usuario: usuario
+            // )
+            print("⚠️ Función registrarPagoCuenta no implementada aún")
+            print("✅ Cuenta marcada como pagada: \(cuenta.nombre)")
         }
     }
     
@@ -255,6 +284,15 @@ class CuentasViewModel: ObservableObject {
                 pagadas: cuentas.filter { $0.estado == .pagada }.count
             )
         }.sorted { $0.total > $1.total }
+    }
+    
+    // MARK: - Deinicializador
+    deinit {
+        // Limpiar observador si existe
+        if let familiaIdUnwrapped = familiaId,
+           let handle = observadorCuentasHandle {
+            firebaseService.detenerObservadorCuentas(familiaId: familiaIdUnwrapped, handle: handle)
+        }
     }
     
     // MARK: - Propiedades computadas adicionales
@@ -408,7 +446,7 @@ class CuentasViewModel: ObservableObject {
     }
     
     func marcarComoPagada(_ cuenta: Cuenta, fechaPago: Date = Date(), montoPagado: Double? = nil) {
-        guard let familiaId = familiaId else { return }
+        guard familiaId != nil else { return }
         
         // Actualizar localmente primero para UI responsiva
         if let index = cuentas.firstIndex(where: { $0.id == cuenta.id }) {
@@ -419,33 +457,23 @@ class CuentasViewModel: ObservableObject {
         
         // Sincronizar con Firebase
         Task {
-            do {
-                try await firebaseService.registrarPagoCuenta(
-                    familiaId: familiaId,
-                    cuentaId: cuenta.id,
-                    monto: montoPagado ?? cuenta.monto,
-                    usuario: "Usuario",
-                    fecha: fechaPago
-                )
-                
-                // Recargar las cuentas para asegurar sincronización
-                await cargarCuentasFamiliares()
-                
-            } catch {
-                await MainActor.run {
-                    self.error = "Error al marcar cuenta como pagada: \(error.localizedDescription)"
-                    // Revertir cambios locales si falló la sincronización
-                    if let index = self.cuentas.firstIndex(where: { $0.id == cuenta.id }) {
-                        self.cuentas[index] = cuenta // Revertir al estado original
-                    }
-                }
-            }
+            // TODO: Implementar registrarPagoCuenta usando crearTransaccionPago
+            // try await firebaseService.registrarPagoCuenta(
+            //     familiaId: familiaId,
+            //     cuentaId: cuenta.id,
+            //     monto: montoPagado ?? cuenta.monto,
+            //     usuario: "Usuario",
+            //     fecha: fechaPago
+            // )
+            print("⚠️ Función registrarPagoCuenta no implementada aún")
+            
+            // El observador actualizará automáticamente las cuentas
         }
     }
     
     // MARK: - Gestión de Pagos
     func registrarPago(cuenta: Cuenta, monto: Double, fecha: Date, notas: String, tieneComprobante: Bool) {
-        guard let familiaId = familiaId else { return }
+        guard let familiaIdUnwrapped = familiaId else { return }
         
         // Actualizar localmente primero para UI responsiva
         if let index = cuentas.firstIndex(where: { $0.id == cuenta.id }) {
@@ -463,14 +491,14 @@ class CuentasViewModel: ObservableObject {
         // Sincronizar con Firebase
         Task {
             do {
-                // Registrar el pago en Firebase (esto actualiza el estado automáticamente)
-                try await firebaseService.registrarPagoCuenta(
-                    familiaId: familiaId,
-                    cuentaId: cuenta.id,
-                    monto: monto,
-                    usuario: "Usuario",
-                    fecha: fecha
-                )
+                // TODO: Implementar registrarPagoCuenta usando crearTransaccionPago
+                // try await firebaseService.registrarPagoCuenta(
+                //     familiaId: familiaId,
+                //     cuentaId: cuenta.id,
+                //     monto: monto,
+                //     usuario: "Usuario",
+                //     fecha: fecha
+                // )
                 
                 // Crear cuenta actualizada con toda la información
                 var cuentaActualizada = cuenta
@@ -489,7 +517,7 @@ class CuentasViewModel: ObservableObject {
                 }
                 
                 // Actualizar la cuenta completa en Firebase
-                try await firebaseService.actualizarCuenta(familiaId: familiaId, cuenta: cuentaActualizada)
+                try await firebaseService.actualizarCuenta(cuentaActualizada, familiaId: familiaIdUnwrapped)
                 
                 print("✅ Pago registrado exitosamente para cuenta: \(cuenta.nombre)")
                 

@@ -6,7 +6,7 @@ import Combine
 struct CategoriaPresupuestoAnalisis: Identifiable {
     let id = UUID().uuidString
     let nombre: String
-    let icono: String
+    let icon: String
     let presupuestoMensual: Double
     let gastoActual: Double
     let gastoProyectado: Double
@@ -152,8 +152,8 @@ class PresupuestoViewModel: ObservableObject {
         
         Task {
             do {
-                async let presupuestosTask = firebaseService.obtenerPresupuestos(familiaId: familiaId)
-                async let deudasTask = firebaseService.obtenerDeudas(familiaId: familiaId)
+                async let presupuestosTask = firebaseService.obtenerPresupuestosFamilia(familiaId: familiaId)
+                async let deudasTask = firebaseService.obtenerDeudasFamilia(familiaId: familiaId)
                 
                 let (presupuestosObtenidos, deudasObtenidas) = try await (presupuestosTask, deudasTask)
                 
@@ -212,8 +212,8 @@ class PresupuestoViewModel: ObservableObject {
         
         Task {
             do {
-                try await firebaseService.crearPresupuesto(familiaId: familiaId, presupuesto: presupuesto)
-                await cargarDatosFamiliares()
+                try await firebaseService.crearPresupuesto(presupuesto, familiaId: familiaId)
+                cargarDatosFamiliares()
                 await MainActor.run {
                     self.isLoading = false
                 }
@@ -239,8 +239,8 @@ class PresupuestoViewModel: ObservableObject {
         
         Task {
             do {
-                try await firebaseService.crearAporte(familiaId: familiaId, aporte: aporte)
-                await cargarDatosFamiliares() // Cargar todos los datos para refrescar la vista
+                try await firebaseService.crearAporte(aporte, familiaId: familiaId)
+                cargarDatosFamiliares() // Cargar todos los datos para refrescar la vista
                 await MainActor.run {
                     self.isLoading = false
                     print("✅ Aporte agregado exitosamente")
@@ -269,8 +269,8 @@ class PresupuestoViewModel: ObservableObject {
         
         Task {
             do {
-                try await firebaseService.crearDeuda(familiaId: familiaId, deuda: deuda)
-                await cargarDatosFamiliares()
+                try await firebaseService.crearDeuda(deuda, familiaId: familiaId)
+                cargarDatosFamiliares()
                 await MainActor.run {
                     self.isLoading = false
                 }
@@ -286,8 +286,8 @@ class PresupuestoViewModel: ObservableObject {
         
         Task {
             do {
-                try await firebaseService.actualizarDeuda(familiaId: familiaId, deuda: deuda)
-                await cargarDatosFamiliares()
+                try await firebaseService.actualizarDeuda(deuda, familiaId: familiaId)
+                cargarDatosFamiliares()
             } catch {
                 await MainActor.run {
                     self.error = "Error al actualizar deuda: \(error.localizedDescription)"
@@ -301,8 +301,8 @@ class PresupuestoViewModel: ObservableObject {
         
         Task {
             do {
-                try await firebaseService.eliminarDeuda(familiaId: familiaId, deudaId: deudaId)
-                await cargarDatosFamiliares()
+                try await firebaseService.eliminarDeuda(deudaId: deudaId, familiaId: familiaId)
+                cargarDatosFamiliares()
             } catch {
                 self.error = "Error al eliminar deuda: \(error.localizedDescription)"
             }
@@ -313,7 +313,7 @@ class PresupuestoViewModel: ObservableObject {
         guard let familiaId = familiaId else { return }
         
         do {
-            let aportesObtenidos = try await firebaseService.obtenerAportes(familiaId: familiaId, presupuestoId: presupuestoId)
+            let aportesObtenidos = try await firebaseService.obtenerAportesFamilia(familiaId: familiaId)
             self.aportes = aportesObtenidos
         } catch {
             self.error = "Error al cargar aportes: \(error.localizedDescription)"
@@ -328,8 +328,8 @@ class PresupuestoViewModel: ObservableObject {
         
         Task {
             do {
-                try await firebaseService.eliminarAporte(familiaId: familiaId, aporteId: id)
-                await cargarDatosFamiliares()
+                try await firebaseService.eliminarAporte(aporteId: id, familiaId: familiaId)
+                cargarDatosFamiliares()
             } catch {
                 await MainActor.run {
                     self.error = "Error al eliminar aporte: \(error.localizedDescription)"
@@ -347,8 +347,8 @@ class PresupuestoViewModel: ObservableObject {
         
         Task {
             do {
-                try await firebaseService.eliminarDeuda(familiaId: familiaId, deudaId: id)
-                await cargarDatosFamiliares()
+                try await firebaseService.eliminarDeuda(deudaId: id, familiaId: familiaId)
+                cargarDatosFamiliares()
             } catch {
                 await MainActor.run {
                     self.error = "Error al eliminar deuda: \(error.localizedDescription)"
@@ -453,7 +453,7 @@ class PresupuestoViewModel: ObservableObject {
             
             return CategoriaPresupuestoAnalisis(
                 nombre: categoria,
-                icono: icono,
+                icon: icono,
                 presupuestoMensual: presupuesto,
                 gastoActual: gastoActual,
                 gastoProyectado: gastoProyectado,
@@ -646,5 +646,185 @@ class PresupuestoViewModel: ObservableObject {
         }
         
         return 0
+    }
+    
+    // MARK: - FASE 1: Gestión de saldos de aportes
+    
+    /// Obtener aportes disponibles (con saldo > 0) del mes actual
+    var aportesDisponibles: [Aporte] {
+        return aportesDelMes.filter { $0.tieneDisponible }
+    }
+    
+    /// Calcular saldo total disponible de todos los aportes
+    var saldoTotalDisponible: Double {
+        return aportesDelMes.reduce(0) { $0 + $1.saldoDisponible }
+    }
+    
+    /// Verificar si hay suficiente saldo para cubrir un monto
+    func tieneSaldoSuficiente(para monto: Double) -> Bool {
+        return saldoTotalDisponible >= monto
+    }
+    
+    /// Obtener aportes que pueden cubrir un monto específico
+    func aportesQuePuedenCubrir(monto: Double) -> [Aporte] {
+        return aportesDisponibles.filter { $0.saldoDisponible >= monto }
+    }
+    
+    /// Calcular distribución automática de un monto entre aportes disponibles
+    func calcularDistribucionAutomatica(monto: Double) -> [(aporte: Aporte, montoAUsar: Double)] {
+        guard tieneSaldoSuficiente(para: monto) else { return [] }
+        
+        var distribucion: [(aporte: Aporte, montoAUsar: Double)] = []
+        var montoRestante = monto
+        
+        // Ordenar aportes por saldo disponible (de mayor a menor)
+        let aportesOrdenados = aportesDisponibles.sorted { $0.saldoDisponible > $1.saldoDisponible }
+        
+        for aporte in aportesOrdenados {
+            if montoRestante <= 0 { break }
+            
+            let montoAUsar = min(aporte.saldoDisponible, montoRestante)
+            distribucion.append((aporte: aporte, montoAUsar: montoAUsar))
+            montoRestante -= montoAUsar
+        }
+        
+        return distribucion
+    }
+    
+    /// Usar monto de aportes específicos y actualizar en Firebase
+    func usarAportes(_ distribucion: [(aporteId: String, montoAUsar: Double)]) async throws {
+        guard let familiaId = familiaId else { 
+            throw NSError(domain: "PresupuestoViewModel", code: 1, userInfo: [NSLocalizedDescriptionKey: "FamiliaId no disponible"])
+        }
+        
+        // Actualizar los aportes localmente primero
+        var aportesActualizados: [Aporte] = []
+        
+        for (aporteId, montoAUsar) in distribucion {
+            guard let index = aportes.firstIndex(where: { $0.id == aporteId }) else { continue }
+            
+            var aporte = aportes[index]
+            guard aporte.usarMonto(montoAUsar) else {
+                throw NSError(domain: "PresupuestoViewModel", code: 2, userInfo: [NSLocalizedDescriptionKey: "Saldo insuficiente en aporte de \(aporte.usuario)"])
+            }
+            
+            aportes[index] = aporte
+            aportesActualizados.append(aporte)
+        }
+        
+        // Actualizar en Firebase
+        for aporte in aportesActualizados {
+            try await firebaseService.actualizarAporte(familiaId: familiaId, aporte: aporte)
+        }
+    }
+    
+    /// FASE 1: Procesar pago completo usando aportes y actualizar cuenta
+    func procesarPagoConAportes(cuenta: Cuenta, distribucion: [(aporteId: String, montoAUsar: Double)], usuario: String) async throws {
+        guard let familiaId = familiaId else {
+            throw NSError(domain: "PresupuestoViewModel", code: 1, userInfo: [NSLocalizedDescriptionKey: "FamiliaId no disponible"])
+        }
+        
+        let montoTotal = distribucion.reduce(0) { $0 + $1.montoAUsar }
+        guard montoTotal >= cuenta.monto else {
+            throw NSError(domain: "PresupuestoViewModel", code: 3, userInfo: [NSLocalizedDescriptionKey: "El monto de los aportes no cubre el total de la cuenta"])
+        }
+        
+        // 1. Usar los aportes
+        try await usarAportes(distribucion)
+        
+        // 2. Crear transacción con referencia a aportes utilizados
+        let aportesUtilizados: [AporteUtilizado] = distribucion.compactMap { (aporteId, montoAUsar) -> AporteUtilizado? in
+            guard let aporte = aportes.first(where: { $0.id == aporteId }) else { return nil }
+            return AporteUtilizado(aporteId: aporteId, usuarioAporte: aporte.usuario, montoUtilizado: montoAUsar)
+        }
+        
+        let transaccion = TransaccionPago(
+            cuentaId: cuenta.id,
+            monto: cuenta.monto,
+            usuario: usuario,
+            descripcion: "Pago de \(cuenta.nombre) usando \(aportesUtilizados.count) aporte(s)"
+        )
+        var transaccionConAportes = transaccion
+        transaccionConAportes.aportesUtilizados = aportesUtilizados
+        
+        try await firebaseService.crearTransaccionPago(familiaId: familiaId, transaccion: transaccionConAportes)
+        
+        // 3. Actualizar cuenta como pagada
+        var cuentaPagada = cuenta
+        cuentaPagada.estado = .pagada
+        cuentaPagada.fechaPago = Date()
+        cuentaPagada.montoPagado = cuenta.monto
+        
+        try await firebaseService.actualizarCuenta(cuentaPagada, familiaId: familiaId)
+        
+        // 4. Recargar datos para refrescar la UI
+        cargarDatosFamiliares()
+    }
+    
+    /// FASE 3: Procesar pago con múltiples aportes
+    func procesarPagoConMultiplesAportes(cuenta: Cuenta, aportesSeleccionados: [AporteSeleccionado], usuario: String) async throws {
+        guard self.familiaId != nil else {
+            throw NSError(domain: "PresupuestoViewModel", code: 1, userInfo: [NSLocalizedDescriptionKey: "FamiliaId no disponible"])
+        }
+        
+        let montoTotal = aportesSeleccionados.reduce(0) { $0 + $1.montoAUsar }
+        guard abs(montoTotal - cuenta.monto) < 0.01 else {
+            throw NSError(domain: "PresupuestoViewModel", code: 3, userInfo: [NSLocalizedDescriptionKey: "La suma de los aportes no coincide con el monto de la cuenta"])
+        }
+        
+        // Validar que todos los aportes tengan saldo suficiente
+        for seleccion in aportesSeleccionados {
+            guard seleccion.aporte.saldoDisponible >= seleccion.montoAUsar else {
+                throw NSError(domain: "PresupuestoViewModel", code: 4, userInfo: [NSLocalizedDescriptionKey: "Saldo insuficiente en aporte de \(seleccion.aporte.usuario)"])
+            }
+        }
+        
+        // Preparar distribución para el método existente
+        let distribucion = aportesSeleccionados.map { (aporteId: $0.aporte.id, montoAUsar: $0.montoAUsar) }
+        
+        // Usar el método existente que ya maneja la transacción completa
+        try await procesarPagoConAportes(cuenta: cuenta, distribucion: distribucion, usuario: usuario)
+    }
+    
+    /// FASE 3: Validar distribución de múltiples aportes
+    func validarDistribucionMultiple(_ aportesSeleccionados: [AporteSeleccionado], montoRequerido: Double) -> (esValida: Bool, error: String?) {
+        guard !aportesSeleccionados.isEmpty else {
+            return (false, "Debe seleccionar al menos un aporte")
+        }
+        
+        let montoTotal = aportesSeleccionados.reduce(0) { $0 + $1.montoAUsar }
+        
+        // Verificar que el monto total coincida
+        guard abs(montoTotal - montoRequerido) < 0.01 else {
+            let diferencia = montoRequerido - montoTotal
+            if diferencia > 0 {
+                return (false, "Faltan $\(String(format: "%.0f", diferencia)) por cubrir")
+            } else {
+                return (false, "Excede en $\(String(format: "%.0f", -diferencia)) el monto requerido")
+            }
+        }
+        
+        // Verificar saldos individuales
+        for seleccion in aportesSeleccionados {
+            guard seleccion.montoAUsar <= seleccion.aporte.saldoDisponible else {
+                return (false, "El aporte de \(seleccion.aporte.usuario) no tiene saldo suficiente")
+            }
+        }
+        
+        return (true, nil)
+    }
+    
+    /// FASE 3: Obtener resumen de distribución
+    func resumenDistribucion(_ aportesSeleccionados: [AporteSeleccionado]) -> String {
+        guard !aportesSeleccionados.isEmpty else { return "Sin aportes seleccionados" }
+        
+        let montoTotal = aportesSeleccionados.reduce(0) { $0 + $1.montoAUsar }
+        let usuarios = aportesSeleccionados.map { $0.aporte.usuario }
+        
+        if aportesSeleccionados.count == 1 {
+            return "Pago de $\(String(format: "%.0f", montoTotal)) usando aporte de \(usuarios.first!)"
+        } else {
+            return "Pago de $\(String(format: "%.0f", montoTotal)) usando \(aportesSeleccionados.count) aportes: \(usuarios.joined(separator: ", "))"
+        }
     }
 }

@@ -70,7 +70,7 @@ struct DetalleCategoriaView: View {
                         .fill(categoria.estado.color.opacity(0.2))
                         .frame(width: 60, height: 60)
                         .overlay(
-                            Image(systemName: categoria.icono)
+                            Image(systemName: categoria.icon)
                                 .foregroundColor(categoria.estado.color)
                                 .font(.title2)
                         )
@@ -586,7 +586,7 @@ struct RecomendacionCard: View {
     DetalleCategoriaView(
         categoria: CategoriaPresupuestoAnalisis(
             nombre: "Luz",
-            icono: "lightbulb.fill",
+            icon: "lightbulb.fill",
             presupuestoMensual: 50000,
             gastoActual: 35000,
             gastoProyectado: 15000,

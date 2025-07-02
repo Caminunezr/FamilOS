@@ -161,7 +161,8 @@ class AuthViewModel: ObservableObject {
             )
             
             print("📝 Creando familia con ID: \(nuevaFamilia.id)")
-            try await firebaseService.crearFamiliaConAdministrador(nuevaFamilia, administrador: miembro)
+            try await firebaseService.crearFamilia(nuevaFamilia)
+            try await firebaseService.agregarMiembroFamilia(familiaId: nuevaFamilia.id, miembro: miembro)
             
             await MainActor.run {
                 self.familiaActual = nuevaFamilia
@@ -311,8 +312,9 @@ class AuthViewModel: ObservableObject {
                 )
                 
                 print("📝 Creando familia con ID: \(nuevaFamilia.id)")
-                // 4. Crear la familia y agregar al usuario como administrador en una sola operación
-                try await firebaseService.crearFamiliaConAdministrador(nuevaFamilia, administrador: miembro)
+                // 4. Crear la familia y agregar al usuario como administrador
+                try await firebaseService.crearFamilia(nuevaFamilia)
+                try await firebaseService.agregarMiembroFamilia(familiaId: nuevaFamilia.id, miembro: miembro)
                 
                 await MainActor.run {
                     self.isAuthenticating = false
@@ -361,7 +363,8 @@ class AuthViewModel: ObservableObject {
             )
             
             // Guardar en Firebase
-            try await firebaseService.crearFamilia(familia, miembroAdmin: miembroAdmin)
+            try await firebaseService.crearFamilia(familia)
+            try await firebaseService.agregarMiembroFamilia(familiaId: familia.id, miembro: miembroAdmin)
             
             // Actualizar estado local
             self.familiaActual = familia
@@ -745,8 +748,9 @@ class AuthViewModel: ObservableObject {
                 print("📋 Familia preparada: \(familia.id)")
                 print("👑 Admin preparado: \(miembro.nombre) con rol \(miembro.rol)")
                 
-                // Crear familia y agregar al usuario como administrador en una sola operación
-                try await firebaseService.crearFamiliaConAdministrador(familia, administrador: miembro)
+                // Crear familia y agregar al usuario como administrador
+                try await firebaseService.crearFamilia(familia)
+                try await firebaseService.agregarMiembroFamilia(familiaId: familia.id, miembro: miembro)
                 
                 print("🎉 Familia creada exitosamente!")
                 

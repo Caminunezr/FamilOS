@@ -148,6 +148,7 @@ struct MainTabView: View {
             
             CuentasView()
                 .environmentObject(cuentasViewModel)
+                .environmentObject(presupuestoViewModel)
                 .tabItem {
                     Label("Cuentas", systemImage: "doc.text.fill")
                 }

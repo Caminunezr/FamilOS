@@ -940,8 +940,8 @@ struct NuevoAporteView: View {
                     )
                     
                     try await viewModel.firebaseService.crearPresupuesto(
-                        familiaId: familiaId,
-                        presupuesto: nuevoPresupuesto
+                        nuevoPresupuesto,
+                        familiaId: familiaId
                     )
                     
                     print("✅ Presupuesto creado exitosamente: \(nuevoPresupuesto.id)")
