@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Bucket
+   uuid = "C3CC70BF-EA20-4DAE-9977-41164BBB89CE"
+   type = "4"
+   version = "2.0">
+   <Breakpoints>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "7BDE56FD-B1F0-4219-928F-C5B4364A2716"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "FamilOS/ViewModels/CuentasViewModel.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "184"
+            endingLineNumber = "184"
+            landmarkName = "actualizarCuenta(_:)"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "7BDE56FD-B1F0-4219-928F-C5B4364A2716 - 7f6e4e8c7fa8c8b3"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(3) suspend resume partial function for closure #1 () async -&gt; () in FamilOS.CuentasViewModel.actualizarCuenta(FamilOS.Cuenta) -&gt; ()"
+                  moduleName = "FamilOS.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/camnr/Documents/AppMacOs/FamilOS/FamilOS/ViewModels/CuentasViewModel.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "184"
+                  endingLineNumber = "184">
+               </Location>
+               <Location
+                  uuid = "7BDE56FD-B1F0-4219-928F-C5B4364A2716 - 2903edf8fc510942"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(4) suspend resume partial function for closure #1 () async -&gt; () in FamilOS.CuentasViewModel.actualizarCuenta(FamilOS.Cuenta) -&gt; ()"
+                  moduleName = "FamilOS.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/camnr/Documents/AppMacOs/FamilOS/FamilOS/ViewModels/CuentasViewModel.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "184"
+                  endingLineNumber = "184">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+   </Breakpoints>
+</Bucket>

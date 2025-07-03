@@ -1,0 +1,80 @@
+{
+  "rules": {
+    "usuarios": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+        ".indexOn": ["email", "familiaId", "fechaCreacion"]
+      }
+    },
+    
+    "familias": {
+      "$familiaId": {
+        ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('familiaId').val() == $familiaId || exists(root.child('familias').child($familiaId).child('miembros').child(auth.uid)))",
+        ".write": "auth != null && (!exists(root.child('familias').child($familiaId)) || root.child('familias').child($familiaId).child('miembros').child(auth.uid).child('rol').val() == 'administrador')",
+        
+        "miembros": {
+          "$miembroId": {
+            ".read": "auth != null",
+            ".write": "auth != null && (auth.uid == $miembroId || root.child('familias').child($familiaId).child('miembros').child(auth.uid).child('rol').val() == 'administrador')"
+          }
+        },
+        
+        "cuentas": {
+          "$cuentaId": {
+            ".read": "auth != null",
+            ".write": "auth != null && (!exists(root.child('familias').child($familiaId).child('cuentas').child($cuentaId)) || root.child('familias').child($familiaId).child('cuentas').child($cuentaId).child('creadoPor').val() == auth.uid || root.child('familias').child($familiaId).child('miembros').child(auth.uid).child('rol').val() == 'administrador')",
+            ".indexOn": ["estado", "fechaVencimiento", "categoria", "creadoPor"]
+          }
+        },
+        
+        "presupuestos": {
+          "$presupuestoId": {
+            ".read": "auth != null",
+            ".write": "auth != null && root.child('familias').child($familiaId).child('miembros').child(auth.uid).child('rol').val() == 'administrador'",
+            ".indexOn": ["categoria", "fechaCreacion", "activo"]
+          }
+        },
+        
+        "aportes": {
+          "$aporteId": {
+            ".read": "auth != null",
+            ".write": "auth != null && (!exists(root.child('familias').child($familiaId).child('aportes').child($aporteId)) || root.child('familias').child($familiaId).child('aportes').child($aporteId).child('usuarioId').val() == auth.uid || root.child('familias').child($familiaId).child('miembros').child(auth.uid).child('rol').val() == 'administrador')",
+            ".indexOn": ["usuarioId", "fecha", "categoria", "cuentaId"]
+          }
+        },
+        
+        "transacciones": {
+          "$transaccionId": {
+            ".read": "auth != null",
+            ".write": "auth != null && (!exists(root.child('familias').child($familiaId).child('transacciones').child($transaccionId)) || root.child('familias').child($familiaId).child('transacciones').child($transaccionId).child('usuarioId').val() == auth.uid || root.child('familias').child($familiaId).child('miembros').child(auth.uid).child('rol').val() == 'administrador')",
+            ".indexOn": ["usuarioId", "fecha", "tipo", "cuentaId"]
+          }
+        },
+        
+        "deudas": {
+          "$deudaId": {
+            ".read": "auth != null",
+            ".write": "auth != null && (!exists(root.child('familias').child($familiaId).child('deudas').child($deudaId)) || root.child('familias').child($familiaId).child('deudas').child($deudaId).child('deudorId').val() == auth.uid || root.child('familias').child($familiaId).child('deudas').child($deudaId).child('acreedorId').val() == auth.uid || root.child('familias').child($familiaId).child('miembros').child(auth.uid).child('rol').val() == 'administrador')",
+            ".indexOn": ["deudorId", "acreedorId", "estado", "fechaCreacion"]
+          }
+        },
+        
+        ".indexOn": ["nombre", "fechaCreacion"]
+      }
+    },
+    
+    "invitaciones": {
+      "$invitacionId": {
+        ".read": "auth != null",
+        ".write": "auth != null && (!exists(root.child('invitaciones').child($invitacionId)) || root.child('familias').child(root.child('invitaciones').child($invitacionId).child('familiaId').val()).child('miembros').child(auth.uid).child('rol').val() == 'administrador')",
+        ".indexOn": ["codigoInvitacion", "familiaId", "estado", "fechaExpiracion"]
+      }
+    },
+    
+    "test": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}

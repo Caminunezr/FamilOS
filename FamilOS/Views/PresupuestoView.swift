@@ -45,6 +45,9 @@ struct PresupuestoView: View {
                     // Resumen financiero
                     ResumenFinancieroView(viewModel: viewModel)
                     
+                    // Alertas financieras
+                    AlertasFinancierasView(viewModel: viewModel)
+                    
                     // Gráficos
                     GraficosPresupuestoView(viewModel: viewModel)
                     
@@ -149,8 +152,10 @@ struct ResumenFinancieroView: View {
     @ObservedObject var viewModel: PresupuestoViewModel
     
     var body: some View {
+        let resumen = viewModel.resumenFinancieroIntegrado()
+        
         VStack(spacing: 15) {
-            Text("Resumen Financiero")
+            Text("Resumen Financiero Integrado")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
@@ -163,18 +168,67 @@ struct ResumenFinancieroView: View {
                 )
                 
                 PresupuestoCard(
-                    titulo: "Gastos",
-                    valor: viewModel.totalDeudasMensuales,
-                    colorFondo: .red.opacity(0.2),
-                    colorTexto: .red
+                    titulo: "Presupuesto",
+                    valor: resumen.presupuestoTotal,
+                    colorFondo: .blue.opacity(0.2),
+                    colorTexto: .blue
+                )
+                
+                PresupuestoCard(
+                    titulo: "Gastado",
+                    valor: resumen.gastoActual,
+                    colorFondo: .orange.opacity(0.2),
+                    colorTexto: .orange
+                )
+            }
+            
+            HStack {
+                PresupuestoCard(
+                    titulo: "Pendiente",
+                    valor: resumen.gastoProyectado,
+                    colorFondo: .yellow.opacity(0.2),
+                    colorTexto: .orange
                 )
                 
                 PresupuestoCard(
                     titulo: "Disponible",
-                    valor: viewModel.saldoDisponible,
-                    colorFondo: .blue.opacity(0.2),
-                    colorTexto: .blue
+                    valor: resumen.disponible,
+                    colorFondo: resumen.disponible >= 0 ? .green.opacity(0.2) : .red.opacity(0.2),
+                    colorTexto: resumen.disponible >= 0 ? .green : .red
                 )
+                
+                PresupuestoCard(
+                    titulo: "% Usado",
+                    valor: resumen.porcentajeUsado * 100,
+                    colorFondo: resumen.porcentajeUsado > 1.0 ? .red.opacity(0.2) : .gray.opacity(0.2),
+                    colorTexto: resumen.porcentajeUsado > 1.0 ? .red : .primary,
+                    esPercentaje: true
+                )
+            }
+            
+            // Indicador de estado general
+            if resumen.excedePresupuesto {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.red)
+                    Text("Presupuesto excedido")
+                        .font(.subheadline)
+                        .foregroundColor(.red)
+                        .fontWeight(.bold)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, 5)
+            } else if resumen.proyeccionExcede {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    Text("Proyección excede presupuesto")
+                        .font(.subheadline)
+                        .foregroundColor(.orange)
+                        .fontWeight(.bold)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, 5)
             }
             
             // Mostrar sobrante transferido si existe
@@ -203,6 +257,15 @@ struct PresupuestoCard: View {
     let valor: Double
     let colorFondo: Color
     let colorTexto: Color
+    let esPercentaje: Bool
+    
+    init(titulo: String, valor: Double, colorFondo: Color, colorTexto: Color, esPercentaje: Bool = false) {
+        self.titulo = titulo
+        self.valor = valor
+        self.colorFondo = colorFondo
+        self.colorTexto = colorTexto
+        self.esPercentaje = esPercentaje
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -210,10 +273,17 @@ struct PresupuestoCard: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
             
-            Text("$\(valor, specifier: "%.2f")")
-                .font(.headline)
-                .foregroundColor(colorTexto)
-                .fontWeight(.bold)
+            if esPercentaje {
+                Text("\(valor, specifier: "%.1f")%")
+                    .font(.headline)
+                    .foregroundColor(colorTexto)
+                    .fontWeight(.bold)
+            } else {
+                Text("$\(valor, specifier: "%.2f")")
+                    .font(.headline)
+                    .foregroundColor(colorTexto)
+                    .fontWeight(.bold)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
@@ -228,19 +298,23 @@ struct GraficosPresupuestoView: View {
     
     var body: some View {
         VStack(spacing: 15) {
-            Text("Gráficos")
+            Text("Análisis de Presupuesto")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
             Picker("Tipo de Gráfico", selection: $seleccionGrafico) {
                 Text("Aportes").tag(0)
-                Text("Gastos").tag(1)
+                Text("Categorías").tag(1)
+                Text("Gastos").tag(2)
             }
             .pickerStyle(.segmented)
             
             if seleccionGrafico == 0 {
                 GraficoAportes(datos: viewModel.datosGraficoAportes())
                     .frame(height: 220)
+            } else if seleccionGrafico == 1 {
+                AnalisisCategorias(categorias: viewModel.analisisPresupuestoVsCuentas())
+                    .frame(height: 300)
             } else {
                 GraficoGastos(datos: viewModel.datosGraficoGastos())
                     .frame(height: 220)
@@ -1315,6 +1389,60 @@ struct NuevoPresupuestoView: View {
         formatter.dateFormat = "MMMM yyyy"
         formatter.locale = Locale(identifier: "es_ES")
         return formatter.string(from: fecha).capitalized
+    }
+}
+
+// MARK: - Análisis de Categorías Integrado
+struct AnalisisCategorias: View {
+    let categorias: [CategoriaPresupuestoAnalisis]
+    
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 10) {
+                ForEach(categorias) { categoria in
+                    CategoriaAnalisisCard(categoria: categoria)
+                }
+                
+                if categorias.isEmpty {
+                    Text("No hay categorías con presupuesto definido")
+                        .foregroundColor(.secondary)
+                        .font(.subheadline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                }
+            }
+            .padding(.vertical, 5)
+        }
+    }
+}
+
+// MARK: - Alertas Financieras
+struct AlertasFinancierasView: View {
+    @ObservedObject var viewModel: PresupuestoViewModel
+    
+    var body: some View {
+        let resumen = viewModel.resumenFinancieroIntegrado()
+        
+        if !resumen.alertas.isEmpty {
+            VStack(spacing: 15) {
+                Text("Alertas Financieras")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                
+                LazyVStack(spacing: 8) {
+                    ForEach(resumen.alertas) { alerta in
+                        AlertaCard(alerta: alerta)
+                    }
+                }
+            }
+            .padding()
+            .background(Color.red.opacity(0.05))
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.red.opacity(0.2), lineWidth: 1)
+            )
+        }
     }
 }
 

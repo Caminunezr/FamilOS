@@ -223,10 +223,10 @@ struct CuentasView: View {
     
     // MARK: - Resumen Rápido
     private var resumenRapido: some View {
-        let resumen = viewModel.resumenMensual
+        let resumen = viewModel.resumenGeneral // ✅ Cambiar a estadísticas generales
         
         return VStack(spacing: 12) {
-            Text("Resumen del Mes")
+            Text("Resumen General") // ✅ Cambiar título
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
@@ -545,10 +545,10 @@ struct CuentasView: View {
     
     // MARK: - Estadísticas Generales
     private var estadisticasGenerales: some View {
-        let resumen = viewModel.resumenMensual
+        let resumen = viewModel.resumenGeneral // ✅ Cambiar a estadísticas generales
         
         return VStack(spacing: 16) {
-            Text("Estadísticas del Mes")
+            Text("Estadísticas Generales")  // ✅ Cambiar título
                 .font(.title2)
                 .fontWeight(.bold)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -560,23 +560,23 @@ struct CuentasView: View {
             ], spacing: 16) {
                 EstadisticaCard(
                     titulo: "Total Cuentas",
-                    valor: "\(viewModel.cuentasMesActual.count)",
+                    valor: "\(viewModel.cuentas.count)", // ✅ Usar todas las cuentas
                     icono: "doc.text",
                     color: .blue
                 )
                 
                 EstadisticaCard(
                     titulo: "Promedio",
-                    valor: String(format: "%.0f", resumen.totalMonto / Double(max(1, viewModel.cuentasMesActual.count))),
+                    valor: String(format: "%.0f", resumen.totalMonto / Double(max(1, viewModel.cuentas.count))), // ✅ Usar todas las cuentas
                     icono: "chart.bar",
                     color: .purple
                 )
                 
                 EstadisticaCard(
-                    titulo: "Ahorro",
-                    valor: String(format: "%.0f", max(0, resumen.totalMonto - resumen.montoPagado)),
-                    icono: "banknote",
-                    color: .green
+                    titulo: "Pendiente",
+                    valor: String(format: "%.0f", resumen.montoPendiente), // ✅ Mostrar monto pendiente
+                    icono: "clock",
+                    color: .orange
                 )
             }
         }
@@ -595,7 +595,7 @@ struct CuentasView: View {
             
             // Distribución por estado (gráfico de barras simple)
             HStack(alignment: .bottom, spacing: 12) {
-                let resumen = viewModel.resumenMensual
+                let resumen = viewModel.resumenGeneral // ✅ Cambiar a estadísticas generales
                 
                 BarraGrafico(
                     valor: resumen.montoPagado,
@@ -627,10 +627,10 @@ struct CuentasView: View {
     
     // MARK: - Análisis por Categoría
     private var analisisPorCategoria: some View {
-        let analisisCategoria = viewModel.analisisPorCategoria
+        let analisisCategoria = viewModel.analisisPorCategoriaGeneral // ✅ Usar análisis general
         
         return VStack(alignment: .leading, spacing: 12) {
-            Text("Gastos por Categoría")
+            Text("Gastos por Categoría (Todas las Cuentas)") // ✅ Aclarar que son todas las cuentas
                 .font(.title2)
                 .fontWeight(.bold)
             
@@ -669,10 +669,10 @@ struct CuentasView: View {
     
     // MARK: - Resumen por Proveedor
     private var resumenProveedores: some View {
-        let topProveedores = viewModel.topProveedores
+        let topProveedores = viewModel.topProveedoresGeneral // ✅ Usar análisis general
         
         return VStack(alignment: .leading, spacing: 12) {
-            Text("Top Proveedores")
+            Text("Top Proveedores (Todas las Cuentas)") // ✅ Aclarar que son todas las cuentas
                 .font(.title2)
                 .fontWeight(.bold)
             

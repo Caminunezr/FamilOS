@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import FirebaseDatabase
 
 // MARK: - Estructuras para el cruce de datos
 struct CategoriaPresupuestoAnalisis: Identifiable {
@@ -130,11 +131,16 @@ class PresupuestoViewModel: ObservableObject {
     let firebaseService = FirebaseService() // Cambiado a público para acceso desde vistas
     var familiaId: String? // Cambiado a público para acceso desde vistas
     
+    // MARK: - Propiedades para observadores en tiempo real
+    private var observadorAportesHandle: DatabaseHandle?
+    private var observadorDeudasHandle: DatabaseHandle?
+    private var observadorPresupuestosHandle: DatabaseHandle?
+    
     // MARK: - Configuración
     
     func configurarFamilia(_ familiaId: String) {
         self.familiaId = familiaId
-        cargarDatosFamiliares()
+        iniciarObservadores()
     }
     
     // MARK: - Configuración de integración con cuentas
@@ -145,30 +151,11 @@ class PresupuestoViewModel: ObservableObject {
     // MARK: - Carga de datos familiares
     
     func cargarDatosFamiliares() {
+        // Este método ahora solo inicia los observadores si no están ya iniciados
         guard let familiaId = familiaId else { return }
         
-        isLoading = true
-        error = nil
-        
-        Task {
-            do {
-                async let presupuestosTask = firebaseService.obtenerPresupuestosFamilia(familiaId: familiaId)
-                async let deudasTask = firebaseService.obtenerDeudasFamilia(familiaId: familiaId)
-                
-                let (presupuestosObtenidos, deudasObtenidas) = try await (presupuestosTask, deudasTask)
-                
-                self.presupuestos = presupuestosObtenidos
-                self.deudas = deudasObtenidas
-                self.isLoading = false
-                
-                // Cargar aportes del presupuesto actual si existe
-                if let presupuestoActual = presupuestoActual {
-                    await cargarAportes(presupuestoId: presupuestoActual.id)
-                }
-            } catch {
-                self.error = "Error al cargar datos: \(error.localizedDescription)"
-                self.isLoading = false
-            }
+        if observadorAportesHandle == nil {
+            iniciarObservadores()
         }
     }
 
@@ -213,13 +200,15 @@ class PresupuestoViewModel: ObservableObject {
         Task {
             do {
                 try await firebaseService.crearPresupuesto(presupuesto, familiaId: familiaId)
-                cargarDatosFamiliares()
                 await MainActor.run {
                     self.isLoading = false
+                    // Los observadores actualizarán automáticamente los datos
                 }
             } catch {
-                self.error = "Error al crear presupuesto: \(error.localizedDescription)"
-                self.isLoading = false
+                await MainActor.run {
+                    self.error = "Error al crear presupuesto: \(error.localizedDescription)"
+                    self.isLoading = false
+                }
             }
         }
     }
@@ -240,10 +229,10 @@ class PresupuestoViewModel: ObservableObject {
         Task {
             do {
                 try await firebaseService.crearAporte(aporte, familiaId: familiaId)
-                cargarDatosFamiliares() // Cargar todos los datos para refrescar la vista
                 await MainActor.run {
                     self.isLoading = false
                     print("✅ Aporte agregado exitosamente")
+                    // Los observadores actualizarán automáticamente los datos
                 }
             } catch {
                 await MainActor.run {
@@ -270,13 +259,15 @@ class PresupuestoViewModel: ObservableObject {
         Task {
             do {
                 try await firebaseService.crearDeuda(deuda, familiaId: familiaId)
-                cargarDatosFamiliares()
                 await MainActor.run {
                     self.isLoading = false
+                    // Los observadores actualizarán automáticamente los datos
                 }
             } catch {
-                self.error = "Error al agregar deuda: \(error.localizedDescription)"
-                self.isLoading = false
+                await MainActor.run {
+                    self.error = "Error al agregar deuda: \(error.localizedDescription)"
+                    self.isLoading = false
+                }
             }
         }
     }
@@ -287,7 +278,7 @@ class PresupuestoViewModel: ObservableObject {
         Task {
             do {
                 try await firebaseService.actualizarDeuda(deuda, familiaId: familiaId)
-                cargarDatosFamiliares()
+                // Los observadores actualizarán automáticamente los datos
             } catch {
                 await MainActor.run {
                     self.error = "Error al actualizar deuda: \(error.localizedDescription)"
@@ -302,7 +293,7 @@ class PresupuestoViewModel: ObservableObject {
         Task {
             do {
                 try await firebaseService.eliminarDeuda(deudaId: deudaId, familiaId: familiaId)
-                cargarDatosFamiliares()
+                // Los observadores actualizarán automáticamente los datos
             } catch {
                 self.error = "Error al eliminar deuda: \(error.localizedDescription)"
             }
@@ -329,7 +320,10 @@ class PresupuestoViewModel: ObservableObject {
         Task {
             do {
                 try await firebaseService.eliminarAporte(aporteId: id, familiaId: familiaId)
-                cargarDatosFamiliares()
+                await MainActor.run {
+                    self.isLoading = false
+                    // Los observadores actualizarán automáticamente los datos
+                }
             } catch {
                 await MainActor.run {
                     self.error = "Error al eliminar aporte: \(error.localizedDescription)"
@@ -348,7 +342,10 @@ class PresupuestoViewModel: ObservableObject {
         Task {
             do {
                 try await firebaseService.eliminarDeuda(deudaId: id, familiaId: familiaId)
-                cargarDatosFamiliares()
+                await MainActor.run {
+                    self.isLoading = false
+                    // Los observadores actualizarán automáticamente los datos
+                }
             } catch {
                 await MainActor.run {
                     self.error = "Error al eliminar deuda: \(error.localizedDescription)"
@@ -757,8 +754,8 @@ class PresupuestoViewModel: ObservableObject {
         
         try await firebaseService.actualizarCuenta(cuentaPagada, familiaId: familiaId)
         
-        // 4. Recargar datos para refrescar la UI
-        cargarDatosFamiliares()
+        // Los observadores actualizarán automáticamente los datos de aportes
+        // No es necesario recargar manualmente
     }
     
     /// FASE 3: Procesar pago con múltiples aportes
@@ -825,6 +822,88 @@ class PresupuestoViewModel: ObservableObject {
             return "Pago de $\(String(format: "%.0f", montoTotal)) usando aporte de \(usuarios.first!)"
         } else {
             return "Pago de $\(String(format: "%.0f", montoTotal)) usando \(aportesSeleccionados.count) aportes: \(usuarios.joined(separator: ", "))"
+        }
+    }
+    
+    // MARK: - Gestión de observadores en tiempo real
+    
+    private func iniciarObservadores() {
+        guard let familiaId = familiaId else { return }
+        
+        // Detener observadores anteriores si existen
+        detenerObservadores()
+        
+        isLoading = true
+        
+        // Observador para aportes
+        observadorAportesHandle = firebaseService.observarAportes(familiaId: familiaId) { [weak self] aportes in
+            Task { @MainActor in
+                guard let self = self else { return }
+                self.aportes = aportes
+                print("🔄 Aportes actualizados: \(aportes.count) aportes")
+                self.actualizarCargaCompleta()
+            }
+        }
+        
+        // Observador para presupuestos
+        observadorPresupuestosHandle = firebaseService.observarPresupuestos(familiaId: familiaId) { [weak self] presupuestos in
+            Task { @MainActor in
+                guard let self = self else { return }
+                self.presupuestos = presupuestos
+                print("🔄 Presupuestos actualizados: \(presupuestos.count) presupuestos")
+                self.actualizarCargaCompleta()
+            }
+        }
+        
+        // Observador para deudas
+        observadorDeudasHandle = firebaseService.observarDeudas(familiaId: familiaId) { [weak self] deudas in
+            Task { @MainActor in
+                guard let self = self else { return }
+                self.deudas = deudas
+                print("🔄 Deudas actualizadas: \(deudas.count) deudas")
+                self.actualizarCargaCompleta()
+            }
+        }
+    }
+    
+    private func detenerObservadores() {
+        guard let familiaId = familiaId else { return }
+        
+        if let handle = observadorAportesHandle {
+            firebaseService.detenerObservadorAportes(familiaId: familiaId, handle: handle)
+            observadorAportesHandle = nil
+        }
+        
+        if let handle = observadorPresupuestosHandle {
+            firebaseService.detenerObservadorPresupuestos(familiaId: familiaId, handle: handle)
+            observadorPresupuestosHandle = nil
+        }
+        
+        if let handle = observadorDeudasHandle {
+            firebaseService.detenerObservadorDeudas(familiaId: familiaId, handle: handle)
+            observadorDeudasHandle = nil
+        }
+    }
+    
+    private func actualizarCargaCompleta() {
+        // Solo marcar como cargado cuando tengamos datos iniciales
+        if !aportes.isEmpty || !presupuestos.isEmpty || !deudas.isEmpty {
+            isLoading = false
+        }
+    }
+    
+    deinit {
+        // Detener observadores de forma síncrona en deinit
+        if let familiaId = familiaId {
+            if let handle = observadorAportesHandle {
+                firebaseService.detenerObservadorAportes(familiaId: familiaId, handle: handle)
+            }
+            if let handle = observadorPresupuestosHandle {
+                firebaseService.detenerObservadorPresupuestos(familiaId: familiaId, handle: handle)
+            }
+            if let handle = observadorDeudasHandle {
+                firebaseService.detenerObservadorDeudas(familiaId: familiaId, handle: handle)
+            }
         }
     }
 }

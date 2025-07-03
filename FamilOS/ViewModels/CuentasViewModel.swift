@@ -3,7 +3,6 @@ import SwiftUI
 import Combine
 import FirebaseDatabase
 
-@MainActor
 class CuentasViewModel: ObservableObject {
     @Published var cuentas: [Cuenta] = []
     @Published var filtroCategorias: Set<String> = []
@@ -25,9 +24,30 @@ class CuentasViewModel: ObservableObject {
     
     private let firebaseService = FirebaseService()
     private var familiaId: String?
-    private var cancellables = Set<AnyCancellable>()
     private var observadorCuentasHandle: DatabaseHandle?
-    
+
+    // Método seguro para detener el observador que puede llamarse desde cualquier contexto
+    private func detenerObservadorCuentas() {
+        guard let familiaIdUnwrapped = familiaId,
+              let handle = observadorCuentasHandle else { return }
+        firebaseService.detenerObservadorCuentas(familiaId: familiaIdUnwrapped, handle: handle)
+        observadorCuentasHandle = nil
+    }
+
+    // Método nonisolated que maneja correctamente la desuscripción en deinit
+    nonisolated private func detenerObservadorCuentasSeguro() {
+        // Captura los valores necesarios antes de la desuscripción
+        // para evitar acceder a propiedades aisladas
+        if let familiaId = self.familiaId, let handle = self.observadorCuentasHandle {
+            FirebaseService().detenerObservadorCuentas(familiaId: familiaId, handle: handle)
+            // No actualizamos observadorCuentasHandle a nil porque el objeto se está destruyendo de todas formas
+        }
+    }
+
+    deinit {
+        detenerObservadorCuentasSeguro()
+    }
+
     enum VistaOrganizacion: String, CaseIterable {
         case porAño = "Por Año"
         
@@ -121,13 +141,7 @@ class CuentasViewModel: ObservableObject {
         }
     }
     
-    private func detenerObservadorCuentas() {
-        guard let familiaIdUnwrapped = familiaId,
-              let handle = observadorCuentasHandle else { return }
-        
-        firebaseService.detenerObservadorCuentas(familiaId: familiaIdUnwrapped, handle: handle)
-        observadorCuentasHandle = nil
-    }
+
     
     // MARK: - Gestión de cuentas
     
@@ -173,32 +187,45 @@ class CuentasViewModel: ObservableObject {
     func eliminarCuenta(_ cuenta: Cuenta) {
         guard let familiaIdUnwrapped = familiaId else { 
             error = "No se puede eliminar: familia no configurada"
+            print("❌ Error en eliminarCuenta: familiaId es nil.")
             return 
         }
         
         // Verificar que la cuenta aún existe en nuestra lista local
-        guard cuentas.contains(where: { $0.id == cuenta.id }) else {
-            error = "La cuenta ya fue eliminada"
+        guard let cuentaIndex = cuentas.firstIndex(where: { $0.id == cuenta.id }) else {
+            error = "La cuenta ya fue eliminada o no se encontró en la lista local."
+            print("⚠️ Advertencia en eliminarCuenta: La cuenta con id \(cuenta.id) no se encontró en el array 'cuentas'.")
             return
         }
+        
+        let cuentaAEliminar = cuentas[cuentaIndex]
+        print("ℹ️ Información de la cuenta a eliminar: \(cuentaAEliminar)")
+
+        // Eliminar de la lista local primero para UI responsiva
+        cuentas.remove(at: cuentaIndex)
         
         isLoading = true
         error = nil
         
-        Task { @MainActor in
+        // Simplificación: usar Task normal sin timeout complejo
+        Task {
             do {
-                print("🗑️ Iniciando eliminación de cuenta: \(cuenta.nombre)")
-                try await firebaseService.eliminarCuenta(cuentaId: cuenta.id, familiaId: familiaIdUnwrapped)
-                // No necesitamos actualizar manualmente porque el observador se encargará
+                print("🗑️ Iniciando eliminación de cuenta en Firebase: \(cuentaAEliminar.nombre) con id \(cuentaAEliminar.id)")
+                try await firebaseService.eliminarCuenta(cuentaId: cuentaAEliminar.id, familiaId: familiaIdUnwrapped)
+                
                 await MainActor.run {
                     self.isLoading = false
-                    print("✅ Cuenta eliminada exitosamente desde ViewModel")
+                    print("✅ Cuenta eliminada exitosamente de Firebase")
                 }
+                
             } catch {
+                print("❌ Error eliminando cuenta desde Firebase: \(error.localizedDescription)")
+                
                 await MainActor.run {
+                    // En caso de error, restaurar la cuenta en la lista local
+                    self.cuentas.insert(cuentaAEliminar, at: cuentaIndex)
                     self.error = "Error al eliminar cuenta: \(error.localizedDescription)"
                     self.isLoading = false
-                    print("❌ Error eliminando cuenta desde ViewModel: \(error)")
                 }
             }
         }
@@ -233,6 +260,38 @@ class CuentasViewModel: ObservableObject {
     }
     
     // MARK: - Computed Properties para Dashboard
+    
+    // ESTADÍSTICAS GENERALES (todas las cuentas, no solo del mes)
+    
+    // Resumen financiero general de todas las cuentas
+    var resumenGeneral: ResumenFinanciero {
+        return ResumenFinanciero(
+            totalCuentas: cuentas.count,
+            totalMonto: cuentas.reduce(0) { $0 + $1.monto },
+            pagadas: cuentas.filter { $0.estado == .pagada }.count,
+            pendientes: cuentas.filter { $0.estado == .pendiente }.count,
+            vencidas: cuentas.filter { $0.estado == .vencida }.count,
+            montoPagado: cuentas.filter { $0.estado == .pagada }.reduce(0) { $0 + $1.monto },
+            montoPendiente: cuentas.filter { $0.estado == .pendiente }.reduce(0) { $0 + $1.monto },
+            montoVencido: cuentas.filter { $0.estado == .vencida }.reduce(0) { $0 + $1.monto }
+        )
+    }
+    
+    // Análisis por categorías de todas las cuentas
+    var gastosPorCategoriaGeneral: [GastoCategoria] {
+        let grouped = Dictionary(grouping: cuentas) { $0.categoria }
+        
+        return grouped.map { categoria, cuentas in
+            GastoCategoria(
+                categoria: categoria,
+                total: cuentas.reduce(0) { $0 + $1.monto },
+                cuentas: cuentas.count,
+                pagadas: cuentas.filter { $0.estado == .pagada }.count
+            )
+        }.sorted { $0.total > $1.total }
+    }
+    
+    // ESTADÍSTICAS MENSUALES (del mes seleccionado)
     
     // Cuentas del mes seleccionado
     var cuentasDelMes: [Cuenta] {
@@ -286,15 +345,6 @@ class CuentasViewModel: ObservableObject {
         }.sorted { $0.total > $1.total }
     }
     
-    // MARK: - Deinicializador
-    deinit {
-        // Limpiar observador si existe
-        if let familiaIdUnwrapped = familiaId,
-           let handle = observadorCuentasHandle {
-            firebaseService.detenerObservadorCuentas(familiaId: familiaIdUnwrapped, handle: handle)
-        }
-    }
-    
     // MARK: - Propiedades computadas adicionales
     var cuentasMesActual: [Cuenta] {
         let calendar = Calendar.current
@@ -311,6 +361,25 @@ class CuentasViewModel: ObservableObject {
         let porcentaje: Double
     }
     
+    // Análisis por categoría de todas las cuentas (no solo del mes)
+    var analisisPorCategoriaGeneral: [AnalisisCategoria] {
+        let totalMonto = cuentas.reduce(0) { $0 + $1.monto }
+        
+        let grouped = Dictionary(grouping: cuentas, by: { $0.categoria })
+        
+        return grouped.map { categoria, cuentas in
+            let total = cuentas.reduce(0) { $0 + $1.monto }
+            let porcentaje = totalMonto > 0 ? (total / totalMonto) * 100 : 0
+            
+            return AnalisisCategoria(
+                categoria: categoria,
+                total: total,
+                cantidad: cuentas.count,
+                porcentaje: porcentaje
+            )
+        }.sorted { $0.total > $1.total }
+    }
+
     var analisisPorCategoria: [AnalisisCategoria] {
         let cuentasMes = cuentasMesActual
         let totalMonto = cuentasMes.reduce(0) { $0 + $1.monto }
@@ -337,6 +406,21 @@ class CuentasViewModel: ObservableObject {
         let cantidad: Int
     }
     
+    // Top proveedores de todas las cuentas (no solo del mes)
+    var topProveedoresGeneral: [AnalisisProveedor] {
+        let grouped = Dictionary(grouping: cuentas, by: { $0.proveedor })
+        
+        return grouped.map { proveedor, cuentas in
+            let total = cuentas.reduce(0) { $0 + $1.monto }
+            
+            return AnalisisProveedor(
+                proveedor: proveedor,
+                total: total,
+                cantidad: cuentas.count
+            )
+        }.sorted { $0.total > $1.total }
+    }
+
     var topProveedores: [AnalisisProveedor] {
         let cuentasMes = cuentasMesActual
         let grouped = Dictionary(grouping: cuentasMes, by: { $0.proveedor })
@@ -350,40 +434,6 @@ class CuentasViewModel: ObservableObject {
                 cantidad: cuentas.count
             )
         }.sorted { $0.total > $1.total }
-    }
-    
-    struct ResumenFinanciero {
-        let totalCuentas: Int
-        let totalMonto: Double
-        let pagadas: Int
-        let pendientes: Int
-        let vencidas: Int
-        let montoPagado: Double
-        let montoPendiente: Double
-        let montoVencido: Double
-        
-        var porcentajePagado: Double {
-            totalMonto > 0 ? (montoPagado / totalMonto) * 100 : 0
-        }
-    }
-    
-    struct GastoCategoria: Identifiable {
-        let id = UUID().uuidString
-        let categoria: String
-        let total: Double
-        let cuentas: Int
-        let pagadas: Int
-        
-        var icono: String {
-            if let categoriaEnum = Cuenta.CategoriasCuentas(rawValue: categoria) {
-                return categoriaEnum.icono
-            }
-            return "questionmark.circle"
-        }
-        
-        var porcentajePagado: Double {
-            cuentas > 0 ? (Double(pagadas) / Double(cuentas)) * 100 : 0
-        }
     }
     
     // MARK: - Navegación temporal
@@ -593,14 +643,13 @@ class CuentasViewModel: ObservableObject {
                     mes: mes,
                     año: añoCuentas.año,
                     nombreMes: DateFormatter().monthSymbols[mes - 1],
-                    cuentas: cuentas.sorted { $0.fechaVencimiento < $1.fechaVencimiento },
-                    totalCuentas: cuentas.count,
-                    totalMonto: cuentas.reduce(0) { $0 + $1.monto },
-                    cuentasPagadas: cuentas.filter { $0.estado == .pagada }.count
+                    cuentas: cuentas.sorted { $0.fechaVencimiento < $1.fechaVencimiento }
                 )
-            }.sorted { $0.mes > $1.mes }
+            };
             
-            return AñoCuentas(año: añoCuentas.año, cuentas: añoCuentas.cuentas, meses: mesesCuentas)
+            let mesesOrdenados = mesesCuentas.sorted { $0.mes > $1.mes };
+            
+            return AñoCuentas(año: añoCuentas.año, cuentas: añoCuentas.cuentas, meses: mesesOrdenados)
         }
     }
     
@@ -630,26 +679,27 @@ class CuentasViewModel: ObservableObject {
             calendario.component(.year, from: cuenta.fechaVencimiento)
         }
         
-        return cuentasAgrupadas.compactMap { año, cuentasDelAño in
+        var resultado: [AñoCuentas] = []
+        
+        for (año, cuentasDelAño) in cuentasAgrupadas {
             // Agrupar por mes dentro del año
             let mesesAgrupados = Dictionary(grouping: cuentasDelAño) { cuenta in
                 calendario.component(.month, from: cuenta.fechaVencimiento)
             }
             
-            let meses = mesesAgrupados.compactMap { (mes: Int, cuentasDelMes: [Cuenta]) -> MesCuentas? in
-                guard mes >= 1 && mes <= 12 else { return nil }
+            var meses: [MesCuentas] = []
+            for (mes, cuentasDelMes) in mesesAgrupados {
+                guard mes >= 1 && mes <= 12 else { continue }
                 let nombreMes = DateFormatter().monthSymbols[mes - 1]
                 
-                return MesCuentas(
+                let mesCuentas = MesCuentas(
                     mes: mes,
                     año: año,
                     nombreMes: nombreMes,
-                    cuentas: cuentasDelMes.sorted { $0.fechaVencimiento < $1.fechaVencimiento },
-                    totalCuentas: cuentasDelMes.count,
-                    totalMonto: cuentasDelMes.reduce(0) { $0 + $1.monto },
-                    cuentasPagadas: cuentasDelMes.filter { $0.estado == .pagada }.count
+                    cuentas: cuentasDelMes.sorted { $0.fechaVencimiento < $1.fechaVencimiento }
                 )
-            }.sorted { $0.mes > $1.mes }
+                meses.append(mesCuentas)
+            }
             
             // Ordenar meses cronológicamente inverso (más reciente primero)
             let mesesOrdenados = meses.sorted { mes1, mes2 in
@@ -661,17 +711,17 @@ class CuentasViewModel: ObservableObject {
                 return mes1.año > mes2.año
             }
             
-            return AñoCuentas(
+            let añoCuentas = AñoCuentas(
                 año: año,
                 cuentas: cuentasDelAño,
-                meses: mesesOrdenados,
-                totalCuentas: cuentasDelAño.count,
-                totalMonto: cuentasDelAño.reduce(0) { $0 + $1.monto },
-                cuentasPagadas: cuentasDelAño.filter { $0.estado == .pagada }.count,
-                cuentasPendientes: cuentasDelAño.filter { $0.estado == .pendiente }.count
+                meses: mesesOrdenados
             )
+            
+            resultado.append(añoCuentas)
         }
-        .sorted { $0.año > $1.año } // Años más recientes primero
+        
+        // Ordenar los años (más recientes primero)
+        return resultado.sorted { $0.año > $1.año }
     }
     
     // Función auxiliar para ordenar meses cronológicamente
@@ -711,40 +761,96 @@ class CuentasViewModel: ObservableObject {
     }
 }
 
-// MARK: - Estructuras auxiliares para organización temporal
+// MARK: - Estructuras para el análisis financiero
 
-struct AñoCuentas: Identifiable {
-    let id = UUID().uuidString
-    let año: Int
-    let cuentas: [Cuenta]
-    var meses: [MesCuentas] = []
+struct ResumenFinanciero {
     let totalCuentas: Int
     let totalMonto: Double
-    let cuentasPagadas: Int
-    let cuentasPendientes: Int
+    let pagadas: Int
+    let pendientes: Int
+    let vencidas: Int
+    let montoPagado: Double
+    let montoPendiente: Double
+    let montoVencido: Double
     
-    init(año: Int, cuentas: [Cuenta], meses: [MesCuentas] = [], totalCuentas: Int? = nil, totalMonto: Double? = nil, cuentasPagadas: Int? = nil, cuentasPendientes: Int? = nil) {
-        self.año = año
-        self.cuentas = cuentas
-        self.meses = meses
-        self.totalCuentas = totalCuentas ?? cuentas.count
-        self.totalMonto = totalMonto ?? cuentas.reduce(0) { $0 + $1.monto }
-        self.cuentasPagadas = cuentasPagadas ?? cuentas.filter { $0.estado == .pagada }.count
-        self.cuentasPendientes = cuentasPendientes ?? cuentas.filter { $0.estado == .pendiente }.count
+    var porcentajePagado: Double {
+        totalMonto > 0 ? (montoPagado / totalMonto) * 100 : 0
+    }
+    
+    var porcentajePendiente: Double {
+        totalMonto > 0 ? (montoPendiente / totalMonto) * 100 : 0
+    }
+    
+    var porcentajeVencido: Double {
+        totalMonto > 0 ? (montoVencido / totalMonto) * 100 : 0
     }
 }
 
+struct GastoCategoria: Identifiable {
+    let id = UUID()
+    let categoria: String
+    let total: Double
+    let cuentas: Int
+    let pagadas: Int
+    
+    var porcentajePagado: Double {
+        cuentas > 0 ? Double(pagadas) / Double(cuentas) * 100 : 0
+    }
+}
+
+// MARK: - Estructuras para agrupación temporal
+
 struct MesCuentas: Identifiable {
-    let id = UUID().uuidString
+    let id = UUID()
     let mes: Int
     let año: Int
     let nombreMes: String
     let cuentas: [Cuenta]
-    let totalCuentas: Int
-    let totalMonto: Double
-    let cuentasPagadas: Int
+    
+    var totalCuentas: Int {
+        return cuentas.count
+    }
+    
+    var totalMonto: Double {
+        return cuentas.reduce(0) { $0 + $1.monto }
+    }
+    
+    var cuentasPagadas: Int {
+        return cuentas.filter { $0.estado == .pagada }.count
+    }
     
     var cuentasPendientes: Int {
-        cuentas.filter { $0.estado == .pendiente }.count
+        return cuentas.filter { $0.estado == .pendiente }.count
+    }
+    
+    var cuentasVencidas: Int {
+        return cuentas.filter { $0.estado == .vencida }.count
+    }
+}
+
+struct AñoCuentas: Identifiable {
+    let id = UUID()
+    let año: Int
+    let cuentas: [Cuenta]
+    var meses: [MesCuentas] = []
+    
+    var totalCuentas: Int {
+        return cuentas.count
+    }
+    
+    var totalMonto: Double {
+        return cuentas.reduce(0) { $0 + $1.monto }
+    }
+    
+    var cuentasPagadas: Int {
+        return cuentas.filter { $0.estado == .pagada }.count
+    }
+    
+    var cuentasPendientes: Int {
+        return cuentas.filter { $0.estado == .pendiente }.count
+    }
+    
+    var cuentasVencidas: Int {
+        return cuentas.filter { $0.estado == .vencida }.count
     }
 }

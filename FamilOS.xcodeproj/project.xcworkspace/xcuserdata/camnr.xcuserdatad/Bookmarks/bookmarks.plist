@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>top-level-items</key>
+	<array>
+		<dict>
+			<key>destination</key>
+			<dict>
+				<key>location-parameters</key>
+				<dict>
+					<key>EndingColumnNumber</key>
+					<string>0</string>
+					<key>EndingLineNumber</key>
+					<string>626</string>
+					<key>StartingColumnNumber</key>
+					<string>0</string>
+					<key>StartingLineNumber</key>
+					<string>625</string>
+					<key>Timestamp</key>
+					<string>773192845.399349</string>
+				</dict>
+				<key>rebasable-url</key>
+				<dict>
+					<key>base</key>
+					<string>home-directory</string>
+					<key>payload</key>
+					<dict>
+						<key>relative-path</key>
+						<string>Library/Developer/Xcode/DerivedData/FamilOS-edvtrcsrzdybkefbwwlshqzzyadi/SourcePackages/checkouts/firebase-ios-sdk/FirebaseDatabase/Sources/third_party/SocketRocket/FSRWebSocket.m</string>
+					</dict>
+				</dict>
+			</dict>
+			<key>text-context</key>
+			<dict>
+				<key>focused</key>
+				<string>    [_outputStream open];
+</string>
+				<key>leading</key>
+				<string>    _outputStream.delegate = self;
+
+</string>
+				<key>trailing</key>
+				<string>    [_inputStream open];
+}
+
+</string>
+			</dict>
+			<key>title</key>
+			<string>Warning: [Internal] Thread running at User-initiated quality-of-service class waiting on a lower QoS thread running at Default quality-of-service class. Investigate ways to avoid priority inversions</string>
+			<key>type</key>
+			<string>bookmark</string>
+		</dict>
+		<dict>
+			<key>destination</key>
+			<dict>
+				<key>location-parameters</key>
+				<dict>
+					<key>EndingColumnNumber</key>
+					<string>8</string>
+					<key>EndingLineNumber</key>
+					<string>30</string>
+					<key>StartingColumnNumber</key>
+					<string>8</string>
+					<key>StartingLineNumber</key>
+					<string>30</string>
+					<key>Timestamp</key>
+					<string>773189526.63326</string>
+				</dict>
+				<key>rebasable-url</key>
+				<dict>
+					<key>base</key>
+					<string>workspace</string>
+					<key>payload</key>
+					<dict>
+						<key>relative-path</key>
+						<string>FamilOS/ViewModels/CuentasViewModel.swift</string>
+					</dict>
+				</dict>
+			</dict>
+			<key>text-context</key>
+			<dict>
+				<key>focused</key>
+				<string></string>
+				<key>leading</key>
+				<string>    // Método seguro para detener el observador que puede llamarse desde cualquier contexto
+    private func detenerObservadorCuentas() {
+        </string>
+				<key>trailing</key>
+				<string>guard let familiaIdUnwrapped = familiaId,
+              let handle = observadorCuentasHandle else { return }
+        firebaseService.detenerObservadorCuentas(familiaId: familiaIdUnwrapped, handle: handle)
+</string>
+			</dict>
+			<key>title</key>
+			<string>Error: Call to main actor-isolated instance method 'detenerObservadorCuentas()' in a synchronous nonisolated context</string>
+			<key>type</key>
+			<string>bookmark</string>
+		</dict>
+		<dict>
+			<key>destination</key>
+			<dict>
+				<key>location-parameters</key>
+				<dict>
+					<key>EndingColumnNumber</key>
+					<string>4</string>
+					<key>EndingLineNumber</key>
+					<string>299</string>
+					<key>StartingColumnNumber</key>
+					<string>4</string>
+					<key>StartingLineNumber</key>
+					<string>299</string>
+					<key>Timestamp</key>
+					<string>773189526.6332951</string>
+				</dict>
+				<key>rebasable-url</key>
+				<dict>
+					<key>base</key>
+					<string>workspace</string>
+					<key>payload</key>
+					<dict>
+						<key>relative-path</key>
+						<string>FamilOS/ViewModels/CuentasViewModel.swift</string>
+					</dict>
+				</dict>
+			</dict>
+			<key>text-context</key>
+			<dict>
+				<key>focused</key>
+				<string></string>
+				<key>leading</key>
+				<string>        let calendar = Calendar.current
+        return cuentas.filter { cuenta in
+    </string>
+				<key>trailing</key>
+				<string>        calendar.isDate(cuenta.fechaVencimiento, equalTo: mesSeleccionado, toGranularity: .month)
+        }
+    }
+</string>
+			</dict>
+			<key>title</key>
+			<string>Error: Invalid redeclaration of 'deinit'</string>
+			<key>type</key>
+			<string>bookmark</string>
+		</dict>
+	</array>
+</dict>
+</plist>

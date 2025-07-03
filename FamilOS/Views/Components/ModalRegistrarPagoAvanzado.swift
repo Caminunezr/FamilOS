@@ -118,6 +118,8 @@ struct ModalRegistrarPagoAvanzado: View {
                 aportesMultiples: aportesMultiples,
                 presupuestoViewModel: presupuestoViewModel
             )
+            .frame(width: 500, height: 600)
+            .frame(minWidth: 480, minHeight: 580)
         }
         .frame(width: 600, height: 750)
         .frame(minWidth: 580, minHeight: 720)
@@ -647,28 +649,56 @@ struct VistaPreviewPago: View {
     let presupuestoViewModel: PresupuestoViewModel
     
     var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 20) {
-                    headerPreview
+        VStack(spacing: 0) {
+            // Header fijo
+            VStack(spacing: 12) {
+                HStack {
+                    Button("Cerrar") {
+                        dismiss()
+                    }
+                    .foregroundColor(.blue)
                     
+                    Spacer()
+                    
+                    Text("Vista Previa del Pago")
+                        .font(.headline.weight(.semibold))
+                        .foregroundColor(primaryTextColor)
+                    
+                    Spacer()
+                    
+                    // Espaciador para centrar el título
+                    Text("")
+                        .frame(width: 50)
+                }
+                
+                VStack(spacing: 4) {
+                    Image(systemName: "eye.circle.fill")
+                        .font(.system(size: 32))
+                        .foregroundColor(.blue)
+                    
+                    Text("Revisa los detalles antes de procesar")
+                        .font(.caption)
+                        .foregroundColor(secondaryTextColor)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(glassMaterial)
+            
+            // Contenido scrollable
+            ScrollView {
+                VStack(spacing: 16) {
                     resumenCuentaSection
                     
                     resumenDistribucionSection
                     
                     impactoEnAportesSection
                 }
-                .padding()
-            }
-            .navigationTitle("Vista Previa")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Cerrar") {
-                        dismiss()
-                    }
-                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
             }
         }
+        .background(Color(NSColor.controlBackgroundColor))
     }
     
     private var headerPreview: some View {
@@ -688,129 +718,154 @@ struct VistaPreviewPago: View {
     }
     
     private var resumenCuentaSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             HStack {
                 Text("Cuenta a Pagar")
-                    .font(.headline.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(primaryTextColor)
                 Spacer()
             }
             
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 infoRow("Proveedor", value: cuenta.proveedor)
                 infoRow("Monto", value: "$\(String(format: "%.0f", montoPago))")
                 infoRow("Categoría", value: cuenta.categoria)
             }
         }
-        .padding()
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .background(glassMaterial)
-        .cornerRadius(12)
+        .cornerRadius(10)
     }
     
     private var resumenDistribucionSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             HStack {
                 Text("Distribución de Aportes")
-                    .font(.headline.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(primaryTextColor)
                 Spacer()
             }
             
             if modoAporte == .unico, let aporte = aporteUnico {
-                VStack(spacing: 8) {
+                VStack(spacing: 6) {
                     HStack {
                         Text("Aporte de \(aporte.usuario)")
+                            .font(.subheadline)
                             .foregroundColor(primaryTextColor)
                         Spacer()
                         Text("$\(String(format: "%.0f", montoPago))")
+                            .font(.subheadline.weight(.semibold))
                             .foregroundColor(.green)
-                            .fontWeight(.semibold)
                     }
                 }
             } else {
-                ForEach(aportesMultiples) { seleccion in
-                    HStack {
-                        Text(seleccion.aporte.usuario)
-                            .foregroundColor(primaryTextColor)
-                        Spacer()
-                        Text("$\(String(format: "%.0f", seleccion.montoAUsar))")
-                            .foregroundColor(.green)
-                            .fontWeight(.semibold)
+                VStack(spacing: 4) {
+                    ForEach(aportesMultiples) { seleccion in
+                        HStack {
+                            Text(seleccion.aporte.usuario)
+                                .font(.subheadline)
+                                .foregroundColor(primaryTextColor)
+                            Spacer()
+                            Text("$\(String(format: "%.0f", seleccion.montoAUsar))")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.green)
+                        }
+                        .padding(.vertical, 2)
                     }
-                }
-                
-                Divider()
-                
-                HStack {
-                    Text("Total")
-                        .fontWeight(.semibold)
-                        .foregroundColor(primaryTextColor)
-                    Spacer()
-                    Text("$\(String(format: "%.0f", aportesMultiples.reduce(0) { $0 + $1.montoAUsar }))")
-                        .fontWeight(.bold)
-                        .foregroundColor(.blue)
+                    
+                    if aportesMultiples.count > 1 {
+                        Divider()
+                            .padding(.vertical, 4)
+                        
+                        HStack {
+                            Text("Total")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(primaryTextColor)
+                            Spacer()
+                            Text("$\(String(format: "%.0f", aportesMultiples.reduce(0) { $0 + $1.montoAUsar }))")
+                                .font(.subheadline.weight(.bold))
+                                .foregroundColor(.blue)
+                        }
+                    }
                 }
             }
         }
-        .padding()
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .background(glassMaterial)
-        .cornerRadius(12)
+        .cornerRadius(10)
     }
     
     private var impactoEnAportesSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             HStack {
                 Text("Impacto en Aportes")
-                    .font(.headline.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(primaryTextColor)
                 Spacer()
             }
             
             if modoAporte == .unico, let aporte = aporteUnico {
-                VStack(spacing: 8) {
+                VStack(spacing: 6) {
                     HStack {
                         Text("Saldo actual")
+                            .font(.caption)
                             .foregroundColor(secondaryTextColor)
                         Spacer()
                         Text("$\(String(format: "%.0f", aporte.saldoDisponible))")
+                            .font(.caption.weight(.medium))
                             .foregroundColor(primaryTextColor)
                     }
                     
                     HStack {
                         Text("Después del pago")
+                            .font(.caption)
                             .foregroundColor(secondaryTextColor)
                         Spacer()
                         Text("$\(String(format: "%.0f", aporte.saldoDisponible - montoPago))")
+                            .font(.caption.weight(.medium))
                             .foregroundColor(.orange)
                     }
                 }
             } else {
-                ForEach(aportesMultiples) { seleccion in
-                    VStack(spacing: 4) {
-                        HStack {
-                            Text(seleccion.aporte.usuario)
-                                .font(.subheadline.weight(.medium))
-                                .foregroundColor(primaryTextColor)
-                            Spacer()
+                VStack(spacing: 6) {
+                    ForEach(aportesMultiples) { seleccion in
+                        VStack(spacing: 3) {
+                            HStack {
+                                Text(seleccion.aporte.usuario)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundColor(primaryTextColor)
+                                Spacer()
+                            }
+                            
+                            HStack {
+                                Text("Actual: $\(String(format: "%.0f", seleccion.aporte.saldoDisponible))")
+                                    .font(.caption2)
+                                    .foregroundColor(secondaryTextColor)
+                                Spacer()
+                                Text("Después: $\(String(format: "%.0f", seleccion.saldoRestante))")
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                            }
                         }
+                        .padding(.vertical, 2)
                         
-                        HStack {
-                            Text("Actual: $\(String(format: "%.0f", seleccion.aporte.saldoDisponible))")
-                                .font(.caption)
-                                .foregroundColor(secondaryTextColor)
-                            Spacer()
-                            Text("Después: $\(String(format: "%.0f", seleccion.saldoRestante))")
-                                .font(.caption)
-                                .foregroundColor(.orange)
+                        if seleccion.id != aportesMultiples.last?.id {
+                            Divider()
+                                .opacity(0.5)
                         }
                     }
-                    .padding(.vertical, 4)
                 }
             }
         }
-        .padding()
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .background(glassMaterial)
-        .cornerRadius(12)
+        .cornerRadius(10)
     }
     
     private func infoRow(_ title: String, value: String) -> some View {
