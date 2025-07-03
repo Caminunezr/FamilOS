@@ -181,9 +181,22 @@ final class FirebaseService {
     
     // FASE 1: Método para actualizar aporte existente
     func actualizarAporte(familiaId: String, aporte: Aporte) async throws {
+        print("🔄 FirebaseService.actualizarAporte:")
+        print("   - FamiliaId: \(familiaId)")
+        print("   - Aporte ID: \(aporte.id)")
+        print("   - Usuario: \(aporte.usuario)")
+        print("   - Monto total: \(aporte.monto)")
+        print("   - Monto utilizado: \(aporte.montoUtilizado)")
+        print("   - Saldo disponible: \(aporte.saldoDisponible)")
+        
         let aporteData = try JSONEncoder().encode(aporte)
         let aporteDict = try JSONSerialization.jsonObject(with: aporteData) as? [String: Any] ?? [:]
+        
+        print("   - Datos a enviar: \(aporteDict)")
+        
         try await database.child("familias").child(familiaId).child("aportes").child(aporte.id).updateChildValues(aporteDict)
+        
+        print("✅ Aporte actualizado en Firebase exitosamente")
     }
     
     func eliminarAporte(aporteId: String, familiaId: String) async throws {

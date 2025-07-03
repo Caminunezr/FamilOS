@@ -82,6 +82,25 @@ struct PresupuestoView: View {
                         Label("Nuevo Aporte", systemImage: "plus.circle.fill")
                     }
                 }
+                
+                // MARK: - DEBUG: Botón temporal para testing
+                #if DEBUG
+                ToolbarItem(placement: .secondaryAction) {
+                    Menu("Debug") {
+                        Button("Recargar Aportes") {
+                            Task {
+                                await viewModel.forzarRecargaAportes()
+                            }
+                        }
+                        
+                        Button("Comparar con Firebase") {
+                            Task {
+                                await viewModel.compararAportesConFirebase()
+                            }
+                        }
+                    }
+                }
+                #endif
             }
         }
         .sheet(isPresented: $mostrarFormularioAporte) {

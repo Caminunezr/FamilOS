@@ -694,25 +694,51 @@ class PresupuestoViewModel: ObservableObject {
             throw NSError(domain: "PresupuestoViewModel", code: 1, userInfo: [NSLocalizedDescriptionKey: "FamiliaId no disponible"])
         }
         
+        print("💳 Iniciando usarAportes:")
+        print("   - FamiliaId: \(familiaId)")
+        print("   - Distribución: \(distribucion)")
+        print("   - Aportes actuales: \(aportes.count)")
+        
         // Actualizar los aportes localmente primero
         var aportesActualizados: [Aporte] = []
         
         for (aporteId, montoAUsar) in distribucion {
-            guard let index = aportes.firstIndex(where: { $0.id == aporteId }) else { continue }
+            guard let index = aportes.firstIndex(where: { $0.id == aporteId }) else { 
+                print("❌ Aporte con ID \(aporteId) no encontrado")
+                continue 
+            }
             
             var aporte = aportes[index]
+            let saldoAnterior = aporte.saldoDisponible
+            
             guard aporte.usarMonto(montoAUsar) else {
                 throw NSError(domain: "PresupuestoViewModel", code: 2, userInfo: [NSLocalizedDescriptionKey: "Saldo insuficiente en aporte de \(aporte.usuario)"])
             }
+            
+            print("💰 Aporte \(aporte.usuario):")
+            print("   - Saldo anterior: \(saldoAnterior)")
+            print("   - Monto usado: \(montoAUsar)")
+            print("   - Saldo nuevo: \(aporte.saldoDisponible)")
+            print("   - Monto utilizado total: \(aporte.montoUtilizado)")
             
             aportes[index] = aporte
             aportesActualizados.append(aporte)
         }
         
+        print("🔄 Actualizando \(aportesActualizados.count) aportes en Firebase...")
+        
         // Actualizar en Firebase
         for aporte in aportesActualizados {
-            try await firebaseService.actualizarAporte(familiaId: familiaId, aporte: aporte)
+            do {
+                try await firebaseService.actualizarAporte(familiaId: familiaId, aporte: aporte)
+                print("✅ Aporte de \(aporte.usuario) actualizado en Firebase")
+            } catch {
+                print("❌ Error actualizando aporte de \(aporte.usuario): \(error)")
+                throw error
+            }
         }
+        
+        print("✅ Todos los aportes actualizados exitosamente")
     }
     
     /// FASE 1: Procesar pago completo usando aportes y actualizar cuenta
@@ -825,6 +851,58 @@ class PresupuestoViewModel: ObservableObject {
         }
     }
     
+    // MARK: - Métodos de debugging y recarga forzada
+    
+    /// Forzar recarga de aportes desde Firebase (para debugging)
+    func forzarRecargaAportes() async {
+        guard let familiaId = familiaId else { 
+            print("❌ No se puede recargar aportes: familiaId es nil")
+            return 
+        }
+        
+        print("🔄 Forzando recarga de aportes desde Firebase...")
+        
+        do {
+            let aportesActualizados = try await firebaseService.obtenerAportesFamilia(familiaId: familiaId)
+            
+            await MainActor.run {
+                print("📊 Aportes obtenidos directamente:")
+                for aporte in aportesActualizados {
+                    print("   - \(aporte.usuario): \(aporte.saldoDisponible) disponible")
+                }
+                
+                self.aportes = aportesActualizados
+                self.objectWillChange.send()
+            }
+        } catch {
+            print("❌ Error al forzar recarga de aportes: \(error)")
+        }
+    }
+    
+    /// Debug: Comparar aportes locales vs Firebase
+    func compararAportesConFirebase() async {
+        guard let familiaId = familiaId else { return }
+        
+        do {
+            let aportesFirebase = try await firebaseService.obtenerAportesFamilia(familiaId: familiaId)
+            
+            print("🔍 Comparación aportes locales vs Firebase:")
+            print("   Locales: \(aportes.count), Firebase: \(aportesFirebase.count)")
+            
+            for aporteLocal in aportes {
+                if let aporteFirebase = aportesFirebase.first(where: { $0.id == aporteLocal.id }) {
+                    if aporteLocal.montoUtilizado != aporteFirebase.montoUtilizado {
+                        print("   ⚠️ Diferencia en \(aporteLocal.usuario):")
+                        print("      Local: utilizado=\(aporteLocal.montoUtilizado), disponible=\(aporteLocal.saldoDisponible)")
+                        print("      Firebase: utilizado=\(aporteFirebase.montoUtilizado), disponible=\(aporteFirebase.saldoDisponible)")
+                    }
+                }
+            }
+        } catch {
+            print("❌ Error comparando aportes: \(error)")
+        }
+    }
+    
     // MARK: - Gestión de observadores en tiempo real
     
     private func iniciarObservadores() {
@@ -839,6 +917,22 @@ class PresupuestoViewModel: ObservableObject {
         observadorAportesHandle = firebaseService.observarAportes(familiaId: familiaId) { [weak self] aportes in
             Task { @MainActor in
                 guard let self = self else { return }
+                
+                print("🔄 Observador de aportes disparado:")
+                print("   - Aportes recibidos: \(aportes.count)")
+                
+                // Comparar con aportes actuales para ver cambios
+                for aporte in aportes {
+                    if let aporteActual = self.aportes.first(where: { $0.id == aporte.id }) {
+                        if aporteActual.montoUtilizado != aporte.montoUtilizado {
+                            print("   📊 Aporte de \(aporte.usuario) cambió:")
+                            print("      - Monto utilizado anterior: \(aporteActual.montoUtilizado)")
+                            print("      - Monto utilizado nuevo: \(aporte.montoUtilizado)")
+                            print("      - Saldo disponible nuevo: \(aporte.saldoDisponible)")
+                        }
+                    }
+                }
+                
                 self.aportes = aportes
                 print("🔄 Aportes actualizados: \(aportes.count) aportes")
                 self.actualizarCargaCompleta()
