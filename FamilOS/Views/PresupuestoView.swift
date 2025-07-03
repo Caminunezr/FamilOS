@@ -524,8 +524,44 @@ struct AportesListView: View {
     }
 }
 
+struct LocalDeudaRowView: View {
+    let deuda: DeudaItem
+    let onDelete: (String) -> Void
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(deuda.categoria)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                Text("Pago único")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            Text("$\(deuda.monto, specifier: "%.0f")")
+                .font(.subheadline)
+                .fontWeight(.medium)
+            
+            Button {
+                onDelete(deuda.id)
+            } label: {
+                Image(systemName: "trash")
+                    .foregroundColor(.red)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding()
+        .background(Color.red.opacity(0.1))
+        .cornerRadius(8)
+    }
+}
+
 struct DeudasListView: View {
-    let deudas: [DeudaPresupuesto]
+    let deudas: [DeudaItem]
     let total: Double
     let onDelete: (String) -> Void
     
@@ -551,40 +587,7 @@ struct DeudasListView: View {
                     .cornerRadius(8)
             } else {
                 ForEach(deudas) { deuda in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(deuda.categoria)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            
-                            if deuda.cuotasTotales > 1 {
-                                Text("Cuota mensual (\(deuda.cuotasTotales) cuotas)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            } else {
-                                Text("Pago único")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        
-                        Spacer()
-                        
-                        Text("$\(deuda.montoCuotaMensual, specifier: "%.2f")")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        
-                        Button {
-                            onDelete(deuda.id)
-                        } label: {
-                            Image(systemName: "trash")
-                                .foregroundColor(.red)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding()
-                    .background(Color.red.opacity(0.1))
-                    .cornerRadius(8)
+                    LocalDeudaRowView(deuda: deuda, onDelete: onDelete)
                 }
             }
         }
@@ -1131,7 +1134,7 @@ struct NuevaDeudaView: View {
                 }
             }
             .navigationTitle("Nuevo Gasto/Deuda")
-            .toolbar {
+            .toolbar(content: {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") {
                         dismiss()
@@ -1139,25 +1142,28 @@ struct NuevaDeudaView: View {
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Guardar") {
-                        guard let presupuestoActual = viewModel.presupuestoActual else { return }
+                    Button(action: {
+                        guard let presupuestoActual = viewModel.presupuestoActual else { 
+                            return 
+                        }
                         
-                        let nuevaDeuda = DeudaPresupuesto(
-                            presupuestoId: presupuestoActual.id,
+                        let nuevaDeuda = DeudaItem(
+                            descripcion: descripcion,
+                            monto: montoTotal,
                             categoria: categoriaSeleccionada.rawValue,
-                            montoTotal: montoTotal,
-                            cuotasTotales: cuotasTotales,
-                            tasaInteres: tasaInteres,
-                            fechaInicio: presupuestoActual.fechaMes,
-                            descripcion: descripcion
+                            fechaRegistro: presupuestoActual.fechaMes,
+                            esPagado: false,
+                            responsable: proveedorSeleccionado
                         )
                         
                         viewModel.agregarDeuda(nuevaDeuda)
                         dismiss()
+                    }) {
+                        Text("Guardar")
                     }
                     .disabled(proveedorSeleccionado.isEmpty || montoTotal <= 0)
                 }
-            }
+            })
         }
     }
     

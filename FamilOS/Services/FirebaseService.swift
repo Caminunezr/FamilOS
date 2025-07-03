@@ -205,7 +205,7 @@ final class FirebaseService {
     
     // MARK: - Deudas Familiares
     
-    func obtenerDeudasFamilia(familiaId: String) async throws -> [DeudaPresupuesto] {
+    func obtenerDeudasFamilia(familiaId: String) async throws -> [DeudaItem] {
         let snapshot = try await database.child("familias").child(familiaId).child("deudas").getData()
         guard snapshot.exists(), let data = snapshot.value as? [String: Any] else {
             return []
@@ -214,7 +214,7 @@ final class FirebaseService {
         return data.values.compactMap { deudaData in
             do {
                 let jsonData = try JSONSerialization.data(withJSONObject: deudaData)
-                return try JSONDecoder().decode(DeudaPresupuesto.self, from: jsonData)
+                return try JSONDecoder().decode(DeudaItem.self, from: jsonData)
             } catch {
                 print("Error decodificando deuda: \(error)")
                 return nil
@@ -222,13 +222,13 @@ final class FirebaseService {
         }
     }
     
-    func crearDeuda(_ deuda: DeudaPresupuesto, familiaId: String) async throws {
+    func crearDeuda(_ deuda: DeudaItem, familiaId: String) async throws {
         let deudaData = try JSONEncoder().encode(deuda)
         let deudaDict = try JSONSerialization.jsonObject(with: deudaData) as? [String: Any] ?? [:]
         try await database.child("familias").child(familiaId).child("deudas").child(deuda.id).setValue(deudaDict)
     }
     
-    func actualizarDeuda(_ deuda: DeudaPresupuesto, familiaId: String) async throws {
+    func actualizarDeuda(_ deuda: DeudaItem, familiaId: String) async throws {
         let deudaData = try JSONEncoder().encode(deuda)
         let deudaDict = try JSONSerialization.jsonObject(with: deudaData) as? [String: Any] ?? [:]
         try await database.child("familias").child(familiaId).child("deudas").child(deuda.id).setValue(deudaDict)
@@ -439,32 +439,32 @@ final class FirebaseService {
     
     // MARK: - Observadores para Deudas
     
-    func observarDeudas(familiaId: String, completion: @escaping ([DeudaPresupuesto]) -> Void) -> DatabaseHandle {
+    func observarDeudas(familiaId: String, completion: @escaping ([DeudaItem]) -> Void) -> DatabaseHandle {
         let deudasRef = database.child("familias").child(familiaId).child("deudas")
         
-        let handle = deudasRef.observe(.value) { snapshot in
+        let observerBlock: (DataSnapshot) -> Void = { snapshot in
             guard let data = snapshot.value as? [String: Any] else {
                 print("📊 Observador deudas: No hay datos, enviando array vacío")
                 completion([])
                 return
             }
             
-            var deudas: [DeudaPresupuesto] = data.values.compactMap { deudaData in
+            var deudas: [DeudaItem] = data.values.compactMap { deudaData in
                 do {
                     let jsonData = try JSONSerialization.data(withJSONObject: deudaData)
-                    return try JSONDecoder().decode(DeudaPresupuesto.self, from: jsonData)
+                    return try JSONDecoder().decode(DeudaItem.self, from: jsonData)
                 } catch {
                     print("❌ Error decodificando deuda en observador: \(error)")
                     return nil
                 }
             }
             
-            deudas = deudas.sorted { $0.fechaInicio < $1.fechaInicio }
+            deudas = deudas.sorted(by: { $0.fechaRegistro < $1.fechaRegistro })
             print("📊 Observador deudas: Enviando \(deudas.count) deudas")
             completion(deudas)
         }
         
-        return handle
+        return deudasRef.observe(.value, with: observerBlock)
     }
     
     func detenerObservadorDeudas(familiaId: String, handle: DatabaseHandle) {

@@ -90,33 +90,7 @@ struct Aporte: Identifiable, Codable {
     }
 }
 
-struct DeudaPresupuesto: Identifiable, Codable {
-    var id: String = UUID().uuidString
-    var presupuestoId: String
-    var categoria: String
-    var montoTotal: Double
-    var cuotasTotales: Int
-    var tasaInteres: Double = 0.0
-    var fechaInicio: Date
-    var descripcion: String = ""
-    
-    // Propiedades calculadas
-    var montoCuotaMensual: Double {
-        if tasaInteres > 0 {
-            // Cálculo con interés compuesto
-            let tasaDecimal = tasaInteres / 100 / 12
-            let factor = pow(1 + tasaDecimal, Double(cuotasTotales))
-            return montoTotal * tasaDecimal * factor / (factor - 1)
-        } else {
-            // Sin interés
-            return montoTotal / Double(cuotasTotales)
-        }
-    }
-    
-    var fechaFinal: Date {
-        Calendar.current.date(byAdding: .month, value: cuotasTotales - 1, to: fechaInicio) ?? fechaInicio
-    }
-}
+// Eliminada la definición duplicada de DeudaPresupuesto - ahora usa la definición en PresupuestoItems.swift
 
 // MARK: - FASE 1: Modelo de Transacción con referencia a aportes
 struct TransaccionPago: Identifiable, Codable {
@@ -126,7 +100,7 @@ struct TransaccionPago: Identifiable, Codable {
     var fecha: TimeInterval = Date().timeIntervalSince1970
     var usuario: String
     var descripcion: String
-    var tipo: TipoTransaccion = .pago
+    var tipo: String = "pago"
     
     // FASE 1: Nuevos campos para tracking de aportes utilizados
     var aportesUtilizados: [AporteUtilizado] = []
@@ -158,8 +132,26 @@ struct AporteUtilizado: Codable {
     }
 }
 
-enum TipoTransaccion: String, Codable {
-    case pago = "pago"
-    case reembolso = "reembolso"
-    case transferencia = "transferencia"
+// Eliminada la definición duplicada de TipoTransaccion - ahora usa la definición en PresupuestoItems.swift
+
+// MARK: - Modelos para UI de Presupuesto Moderno
+
+struct ResumenPresupuesto {
+    let totalAportado: Double
+    let totalGastado: Double
+    let totalAhorrado: Double
+    let totalDeuda: Double
+    let saldoAportes: Double
+    let porcentajeGastado: Double
+    let porcentajeAhorrado: Double
+    
+    init(totalAportado: Double, totalGastado: Double, totalAhorrado: Double, totalDeuda: Double) {
+        self.totalAportado = totalAportado
+        self.totalGastado = totalGastado
+        self.totalAhorrado = totalAhorrado
+        self.totalDeuda = totalDeuda
+        self.saldoAportes = totalAportado - totalGastado - totalAhorrado
+        self.porcentajeGastado = totalAportado > 0 ? (totalGastado / totalAportado) * 100 : 0
+        self.porcentajeAhorrado = totalAportado > 0 ? (totalAhorrado / totalAportado) * 100 : 0
+    }
 }

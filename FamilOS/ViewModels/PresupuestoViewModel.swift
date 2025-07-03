@@ -119,15 +119,17 @@ enum NivelUrgencia {
 class PresupuestoViewModel: ObservableObject {
     @Published var presupuestos: [PresupuestoMensual] = []
     @Published var aportes: [Aporte] = []
-    @Published var deudas: [DeudaPresupuesto] = []
+    @Published var deudas: [DeudaItem] = []
     @Published var mesSeleccionado: Date = Date()
     @Published var mostrarMesesAnteriores: Bool = false
     @Published var isLoading: Bool = false
     @Published var error: String?
+    @Published var isPerformingAction: Bool = false
     
     // MARK: - Nuevas propiedades para integración con cuentas
     @Published var presupuestosPorCategoria: [String: Double] = [:]
     private var cuentasViewModel: CuentasViewModel?
+    private var authViewModel: AuthViewModel?
     let firebaseService = FirebaseService() // Cambiado a público para acceso desde vistas
     var familiaId: String? // Cambiado a público para acceso desde vistas
     
@@ -146,6 +148,10 @@ class PresupuestoViewModel: ObservableObject {
     // MARK: - Configuración de integración con cuentas
     func configurarIntegracionCuentas(_ cuentasVM: CuentasViewModel) {
         self.cuentasViewModel = cuentasVM
+    }
+    
+    func configurarAuth(_ authVM: AuthViewModel) {
+        self.authViewModel = authVM
     }
     
     // MARK: - Carga de datos familiares
@@ -172,17 +178,25 @@ class PresupuestoViewModel: ObservableObject {
         return aportes.filter { $0.presupuestoId == presupuesto.id }
     }
     
-    var deudasDelMes: [DeudaPresupuesto] {
+    var deudasDelMes: [DeudaItem] {
         guard let presupuesto = presupuestoActual else { return [] }
-        return deudas.filter { $0.presupuestoId == presupuesto.id }
+        // DeudaItem no tiene presupuestoId, por lo que filtramos por el mes
+        let calendar = Calendar.current
+        return deudas.filter { deuda in
+            calendar.isDate(deuda.fechaRegistro, equalTo: presupuesto.fechaMes, toGranularity: .month)
+        }
     }
     
     var totalAportes: Double {
-        return aportesDelMes.reduce(0) { $0 + $1.monto }
+        return aportesDelMes.reduce(into: 0.0) { result, aporte in
+            result += aporte.monto
+        }
     }
     
     var totalDeudasMensuales: Double {
-        return deudasDelMes.reduce(0) { $0 + $1.montoCuotaMensual }
+        return deudasDelMes.reduce(into: 0.0) { result, deuda in
+            result += deuda.monto
+        }
     }
     
     var saldoDisponible: Double {
@@ -210,6 +224,45 @@ class PresupuestoViewModel: ObservableObject {
                     self.isLoading = false
                 }
             }
+        }
+    }
+    
+    // MARK: - Métodos para creación de presupuestos
+
+    func crearPresupuestoMes() async {
+        guard let usuario = authViewModel?.usuarioActual?.nombre else { return }
+        
+        let calendar = Calendar.current
+        let nuevoPresupuesto = PresupuestoMensual(
+            fechaMes: mesSeleccionado,
+            creador: usuario,
+            cerrado: false,
+            sobranteTransferido: 0
+        )
+        
+        await MainActor.run {
+            isLoading = true
+        }
+        
+        do {
+            guard let familiaId = familiaId else { 
+                throw NSError(domain: "PresupuestoViewModel", code: 100, 
+                             userInfo: [NSLocalizedDescriptionKey: "No hay una familia configurada"])
+            }
+            
+            try await firebaseService.crearPresupuesto(nuevoPresupuesto, familiaId: familiaId)
+            print("✅ Presupuesto creado para \(nuevoPresupuesto.nombreMes)")
+            
+            // El observador actualizará los datos automáticamente
+        } catch {
+            await MainActor.run {
+                self.error = "Error al crear presupuesto: \(error.localizedDescription)"
+                print("❌ Error creando presupuesto: \(error)")
+            }
+        }
+        
+        await MainActor.run {
+            isLoading = false
         }
     }
     
@@ -250,7 +303,7 @@ class PresupuestoViewModel: ObservableObject {
         }
     }
     
-    func agregarDeuda(_ deuda: DeudaPresupuesto) {
+    func agregarDeuda(_ deuda: DeudaItem) {
         guard let familiaId = familiaId else { return }
         
         isLoading = true
@@ -272,7 +325,7 @@ class PresupuestoViewModel: ObservableObject {
         }
     }
     
-    func actualizarDeuda(_ deuda: DeudaPresupuesto) {
+    func actualizarDeuda(_ deuda: DeudaItem) {
         guard let familiaId = familiaId else { return }
         
         Task {
@@ -410,7 +463,7 @@ class PresupuestoViewModel: ObservableObject {
         let deudasAgrupadas = Dictionary(grouping: deudasDelMes, by: { $0.categoria })
         
         for (categoria, deudas) in deudasAgrupadas {
-            let total = deudas.reduce(0) { $0 + $1.montoCuotaMensual }
+            let total = deudas.reduce(0) { $0 + $1.monto }
             datos.append((categoria, total))
         }
         
@@ -432,12 +485,16 @@ class PresupuestoViewModel: ObservableObject {
             // Calcular gastos reales (cuentas pagadas)
             let gastoActual = cuentasCategoria
                 .filter { $0.estado == .pagada }
-                .reduce(0) { $0 + $1.monto }
+                .reduce(into: 0.0) { result, cuenta in
+                    result += cuenta.monto
+                }
             
             // Calcular gastos proyectados (pendientes + vencidas)
             let gastoProyectado = cuentasCategoria
                 .filter { $0.estado != .pagada }
-                .reduce(0) { $0 + $1.monto }
+                .reduce(into: 0.0) { result, cuenta in
+                    result += cuenta.monto
+                }
             
             let porcentajeUsado = presupuesto > 0 ? gastoActual / presupuesto : 0
             let estado = calcularEstadoPresupuesto(porcentajeUsado, gastoProyectado: gastoProyectado, presupuesto: presupuesto)
@@ -998,6 +1055,93 @@ class PresupuestoViewModel: ObservableObject {
             if let handle = observadorDeudasHandle {
                 firebaseService.detenerObservadorDeudas(familiaId: familiaId, handle: handle)
             }
+        }
+    }
+    
+    // MARK: - Propiedades adicionales para el resumen financiero
+    
+    var gastosDelMes: [GastoItem] {
+        // Por ahora retornamos una lista vacía hasta implementar gastos
+        return []
+    }
+    
+    var ahorrosDelMes: [AhorroItem] {
+        // Por ahora retornamos una lista vacía hasta implementar ahorros
+        return []
+    }
+    
+    var totalGastos: Double {
+        // TODO: Implementar cálculo de gastos reales
+        return totalDeudasMensuales // Por ahora usamos las deudas como gastos
+    }
+
+    var totalAhorros: Double {
+        // TODO: Implementar cálculo de ahorros
+        return 0.0
+    }
+
+    var saldoAportes: Double {
+        return totalAportes - totalGastos - totalAhorros
+    }
+
+    var porcentajeGastado: Double {
+        return totalAportes > 0 ? (totalGastos / totalAportes) * 100 : 0
+    }
+
+    var porcentajeAhorrado: Double {
+        return totalAportes > 0 ? (totalAhorros / totalAportes) * 100 : 0
+    }
+    
+    // MARK: - Método de carga de datos simplificado
+    
+    func cargarDatos() async {
+        await MainActor.run {
+            isLoading = true
+            error = nil
+        }
+        
+        do {
+            // Simplemente asegurarnos que los datos estén cargados (observadores)
+            if let familiaId = familiaId {
+                if observadorAportesHandle == nil {
+                    iniciarObservadores()
+                }
+            }
+        } catch {
+            await MainActor.run {
+                self.error = "Error cargando datos: \(error.localizedDescription)"
+            }
+        }
+        
+        // La carga se marcará como completada en el método actualizarCargaCompleta
+    }
+    
+    // MARK: - Métodos pendientes de implementar
+    
+    func eliminarGasto(_ id: String) async {
+        print("⚠️ Método eliminarGasto no implementado aún")
+        // TODO: Implementar cuando se añada el soporte para gastos
+    }
+
+    func eliminarAhorro(_ id: String) async {
+        print("⚠️ Método eliminarAhorro no implementado aún")
+        // TODO: Implementar cuando se añada el soporte para ahorros
+    }
+    
+    // MARK: - Método para cerrar mes
+    
+    func cerrarMes() async {
+        guard let presupuestoActual = presupuestoActual else { return }
+        
+        await MainActor.run {
+            isPerformingAction = true
+        }
+        
+        // Transferir sobrantes y cerrar mes
+        transferirSobrante()
+        
+        await MainActor.run {
+            isPerformingAction = false
         }
     }
 }

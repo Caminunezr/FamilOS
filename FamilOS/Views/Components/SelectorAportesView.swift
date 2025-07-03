@@ -101,7 +101,7 @@ struct SelectorAportesView: View {
     private var aportesList: some View {
         VStack(spacing: 12) {
             ForEach(aportesDisponibles) { aporte in
-                AporteRowView(
+                SelectorAporteRowView(
                     aporte: aporte,
                     montoRequerido: montoRequerido,
                     isSelected: aporteSeleccionado?.id == aporte.id,
@@ -201,7 +201,7 @@ struct SelectorAportesView: View {
 }
 
 // MARK: - Vista de Fila de Aporte
-struct AporteRowView: View {
+struct SelectorAporteRowView: View {
     @Environment(\.colorScheme) private var colorScheme
     let aporte: Aporte
     let montoRequerido: Double

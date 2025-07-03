@@ -264,8 +264,8 @@ class CuentasViewModel: ObservableObject {
     // ESTADÍSTICAS GENERALES (todas las cuentas, no solo del mes)
     
     // Resumen financiero general de todas las cuentas
-    var resumenGeneral: ResumenFinanciero {
-        return ResumenFinanciero(
+    var resumenGeneral: ResumenCuentas {
+        return ResumenCuentas(
             totalCuentas: cuentas.count,
             totalMonto: cuentas.reduce(0) { $0 + $1.monto },
             pagadas: cuentas.filter { $0.estado == .pagada }.count,
@@ -302,10 +302,10 @@ class CuentasViewModel: ObservableObject {
     }
     
     // Resumen financiero del mes
-    var resumenMensual: ResumenFinanciero {
+    var resumenMensual: ResumenCuentas {
         let cuentasMes = cuentasDelMes
         
-        return ResumenFinanciero(
+        return ResumenCuentas(
             totalCuentas: cuentasMes.count,
             totalMonto: cuentasMes.reduce(0) { $0 + $1.monto },
             pagadas: cuentasMes.filter { $0.estado == .pagada }.count,
@@ -763,7 +763,7 @@ class CuentasViewModel: ObservableObject {
 
 // MARK: - Estructuras para el análisis financiero
 
-struct ResumenFinanciero {
+struct ResumenCuentas {
     let totalCuentas: Int
     let totalMonto: Double
     let pagadas: Int
