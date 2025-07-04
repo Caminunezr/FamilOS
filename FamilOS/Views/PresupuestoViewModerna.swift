@@ -287,20 +287,22 @@ struct PresupuestoViewModerna: View {
     // MARK: - Actions
     
     private func eliminarTransaccion(id: String, tipo: TipoTransaccion) {
-        Task {
-            switch tipo {
-            case .aporte:
-                await viewModel.eliminarAporte(id: id)
-            case .gasto:
+        switch tipo {
+        case .aporte:
+            viewModel.eliminarAporte(id: id)
+        case .gasto:
+            Task {
                 await viewModel.eliminarGasto(id)
-            case .ahorro:
-                await viewModel.eliminarAhorro(id)
-            case .deuda:
-                await viewModel.eliminarDeuda(id: id)
-            case .pago:
-                // TODO: Implementar eliminación de pagos
-                print("⚠️ Eliminación de pagos no implementada")
             }
+        case .ahorro:
+            Task {
+                await viewModel.eliminarAhorro(id)
+            }
+        case .deuda:
+            viewModel.eliminarDeuda(id: id)
+        case .pago:
+            // TODO: Implementar eliminación de pagos
+            print("⚠️ Eliminación de pagos no implementada")
         }
     }
     

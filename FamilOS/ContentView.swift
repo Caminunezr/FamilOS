@@ -154,8 +154,9 @@ struct MainTabView: View {
                 }
                 .tag(1)
             
-            PresupuestoView()
+            PresupuestoViewModerna()
                 .environmentObject(presupuestoViewModel)
+                .environmentObject(authViewModel)
                 .tabItem {
                     Label("Presupuesto", systemImage: "chart.pie.fill")
                 }
