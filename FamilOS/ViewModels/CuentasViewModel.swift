@@ -25,6 +25,11 @@ class CuentasViewModel: ObservableObject {
     private let firebaseService = FirebaseService()
     private var familiaId: String?
     private var observadorCuentasHandle: DatabaseHandle?
+    
+    // MARK: - Método público para verificación de integración
+    var familiaIdActual: String? {
+        return familiaId
+    }
 
     // Método seguro para detener el observador que puede llamarse desde cualquier contexto
     private func detenerObservadorCuentas() {

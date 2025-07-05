@@ -1,7 +1,7 @@
 import Foundation
 
 // MARK: - Familia
-struct Familia: Identifiable, Codable {
+struct Familia: Identifiable, Codable, Equatable {
     var id: String = UUID().uuidString
     var nombre: String
     var descripcion: String
@@ -18,10 +18,15 @@ struct Familia: Identifiable, Codable {
         self.miembros = [:]
         self.configuracion = ConfiguracionFamilia()
     }
+    
+    // MARK: - Equatable
+    static func == (lhs: Familia, rhs: Familia) -> Bool {
+        return lhs.id == rhs.id
+    }
 }
 
 // MARK: - MiembroFamilia
-struct MiembroFamilia: Identifiable, Codable {
+struct MiembroFamilia: Identifiable, Codable, Equatable {
     var id: String // userId
     var nombre: String
     var email: String
@@ -40,6 +45,11 @@ struct MiembroFamilia: Identifiable, Codable {
         self.activo = true
         self.avatar = nil
         self.familiaId = familiaId
+    }
+    
+    // MARK: - Equatable
+    static func == (lhs: MiembroFamilia, rhs: MiembroFamilia) -> Bool {
+        return lhs.id == rhs.id
     }
 }
 

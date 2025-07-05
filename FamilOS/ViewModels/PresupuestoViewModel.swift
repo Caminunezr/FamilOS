@@ -148,6 +148,21 @@ class PresupuestoViewModel: ObservableObject {
     // MARK: - Configuración de integración con cuentas
     func configurarIntegracionCuentas(_ cuentasVM: CuentasViewModel) {
         self.cuentasViewModel = cuentasVM
+        print("🔗 INTEGRACIÓN CONFIGURADA:")
+        print("   - PresupuestoViewModel conectado con CuentasViewModel")
+        print("   - FamiliaId PresupuestoViewModel: \(familiaId ?? "nil")")
+        print("   - FamiliaId CuentasViewModel: \(cuentasVM.familiaIdActual ?? "nil")")
+        
+        // Verificar que ambos ViewModels tengan la misma familia
+        if let presupuestoFamiliaId = familiaId, let cuentasFamiliaId = cuentasVM.familiaIdActual {
+            if presupuestoFamiliaId == cuentasFamiliaId {
+                print("✅ Ambos ViewModels están configurados para la misma familia")
+            } else {
+                print("⚠️ Los ViewModels están configurados para familias diferentes")
+                print("   - PresupuestoViewModel: \(presupuestoFamiliaId)")
+                print("   - CuentasViewModel: \(cuentasFamiliaId)")
+            }
+        }
     }
     
     func configurarAuth(_ authVM: AuthViewModel) {
@@ -203,7 +218,106 @@ class PresupuestoViewModel: ObservableObject {
         return totalAportes - totalDeudasMensuales + (presupuestoActual?.sobranteTransferido ?? 0)
     }
     
-    // MARK: - Gestión de presupuestos
+    // MARK: - Métodos de verificación y logging mejorados
+    
+    /// Verificar la integración con CuentasViewModel
+    func verificarIntegracionCuentas() {
+        print("🔍 Verificando integración con CuentasViewModel:")
+        
+        if let cuentasVM = cuentasViewModel {
+            print("   ✅ CuentasViewModel configurado")
+            print("   📊 Familia en PresupuestoVM: \(familiaId ?? "nil")")
+            print("   📊 Familia en CuentasVM: \(cuentasVM.familiaIdActual ?? "nil")")
+            
+            if let familiaIdPresupuesto = familiaId,
+               let familiaIdCuentas = cuentasVM.familiaIdActual {
+                if familiaIdPresupuesto == familiaIdCuentas {
+                    print("   ✅ IDs de familia coinciden")
+                } else {
+                    print("   ❌ IDs de familia NO coinciden")
+                }
+            } else {
+                print("   ⚠️ Una o ambas familias no están configuradas")
+            }
+            
+            print("   📱 Cuentas cargadas: \(cuentasVM.cuentas.count)")
+        } else {
+            print("   ❌ CuentasViewModel NO configurado")
+        }
+        
+        print("   💰 Aportes cargados: \(aportes.count)")
+        print("   💰 Saldo total disponible: \(saldoTotalDisponible)")
+    }
+    
+    /// Logging detallado del proceso de pago con aportes
+    func logProcesoPago(cuenta: Cuenta, distribucion: [(aporteId: String, montoAUsar: Double)]) {
+        print("\n💳 === INICIO PROCESO DE PAGO ===")
+        print("📄 Cuenta: \(cuenta.nombre)")
+        print("💰 Monto: \(cuenta.monto)")
+        print("📂 Categoría: \(cuenta.categoria)")
+        print("🗓 Fecha vencimiento: \(cuenta.fechaVencimiento)")
+        
+        print("\n🔍 Estado de aportes ANTES del pago:")
+        for aporte in aportes {
+            print("   - \(aporte.usuario): \(aporte.saldoDisponible) disponible (\(aporte.montoUtilizado) usado de \(aporte.monto))")
+        }
+        
+        print("\n📋 Distribución solicitada:")
+        for (aporteId, montoAUsar) in distribucion {
+            if let aporte = aportes.first(where: { $0.id == aporteId }) {
+                print("   - \(aporte.usuario): usar \(montoAUsar) de \(aporte.saldoDisponible) disponible")
+            } else {
+                print("   - Aporte \(aporteId): NO ENCONTRADO")
+            }
+        }
+        
+        let totalDistribucion = distribucion.reduce(0) { $0 + $1.montoAUsar }
+        print("📊 Total distribución: \(totalDistribucion)")
+        print("📊 Diferencia con cuenta: \(totalDistribucion - cuenta.monto)")
+        print("💳 === FIN LOGGING INICIAL ===\n")
+    }
+    
+    /// Logging después del pago
+    func logResultadoPago(exito: Bool, error: Error?) {
+        print("\n💳 === RESULTADO DEL PAGO ===")
+        if exito {
+            print("✅ Pago procesado exitosamente")
+            print("\n🔍 Estado de aportes DESPUÉS del pago:")
+            for aporte in aportes {
+                print("   - \(aporte.usuario): \(aporte.saldoDisponible) disponible (\(aporte.montoUtilizado) usado de \(aporte.monto))")
+            }
+            print("📊 Saldo total disponible: \(saldoTotalDisponible)")
+        } else {
+            print("❌ Error procesando pago: \(error?.localizedDescription ?? "Error desconocido")")
+        }
+        print("💳 === FIN RESULTADO PAGO ===\n")
+    }
+    
+    /// Verificar consistencia de datos después de operaciones
+    func verificarConsistenciaDatos() async {
+        print("🔍 Verificando consistencia de datos...")
+        
+        // Comparar con Firebase
+        await compararAportesConFirebase()
+        
+        // Verificar cálculos
+        print("📊 Verificación de cálculos:")
+        print("   - Total aportes: \(totalAportes)")
+        print("   - Saldo disponible: \(saldoTotalDisponible)")
+        print("   - Diferencia: \(totalAportes - saldoDisponible)")
+        
+        // Verificar cada aporte individualmente
+        for aporte in aportes {
+            let calculoSaldo = aporte.monto - aporte.montoUtilizado
+            if abs(calculoSaldo - aporte.saldoDisponible) > 0.01 {
+                print("   ⚠️ Inconsistencia en aporte de \(aporte.usuario):")
+                print("      Saldo reportado: \(aporte.saldoDisponible)")
+                print("      Saldo calculado: \(calculoSaldo)")
+            }
+        }
+    }
+    
+    // MARK: - Métodos de gestión de presupuestos
     
     func crearPresupuestoMensual(_ presupuesto: PresupuestoMensual) {
         guard let familiaId = familiaId else { return }
@@ -751,10 +865,14 @@ class PresupuestoViewModel: ObservableObject {
             throw NSError(domain: "PresupuestoViewModel", code: 1, userInfo: [NSLocalizedDescriptionKey: "FamiliaId no disponible"])
         }
         
-        print("💳 Iniciando usarAportes:")
+        print("💳 INICIO: usarAportes")
         print("   - FamiliaId: \(familiaId)")
         print("   - Distribución: \(distribucion)")
         print("   - Aportes actuales: \(aportes.count)")
+        print("   - Aportes antes de modificar:")
+        for aporte in aportes {
+            print("     * \(aporte.usuario): monto=\(aporte.monto), utilizado=\(aporte.montoUtilizado), disponible=\(aporte.saldoDisponible)")
+        }
         
         // Actualizar los aportes localmente primero
         var aportesActualizados: [Aporte] = []
@@ -784,18 +902,34 @@ class PresupuestoViewModel: ObservableObject {
         
         print("🔄 Actualizando \(aportesActualizados.count) aportes en Firebase...")
         
+        // Verificar estado antes de enviar a Firebase
+        print("📊 Estado de aportes antes de Firebase:")
+        for aporte in aportesActualizados {
+            print("   - \(aporte.usuario): utilizado=\(aporte.montoUtilizado), disponible=\(aporte.saldoDisponible)")
+        }
+        
         // Actualizar en Firebase
         for aporte in aportesActualizados {
             do {
+                print("🚀 Enviando aporte de \(aporte.usuario) a Firebase...")
                 try await firebaseService.actualizarAporte(familiaId: familiaId, aporte: aporte)
                 print("✅ Aporte de \(aporte.usuario) actualizado en Firebase")
             } catch {
                 print("❌ Error actualizando aporte de \(aporte.usuario): \(error)")
+                print("   - Error details: \(error.localizedDescription)")
+                if let nsError = error as NSError? {
+                    print("   - Domain: \(nsError.domain), Code: \(nsError.code)")
+                    print("   - UserInfo: \(nsError.userInfo)")
+                }
                 throw error
             }
         }
         
-        print("✅ Todos los aportes actualizados exitosamente")
+        print("✅ FINALIZADO: Todos los aportes actualizados exitosamente")
+        
+        // Forzar recarga para verificar que los cambios llegaron
+        print("🔄 Forzando recarga para verificar cambios...")
+        await forzarRecargaAportes()
     }
     
     /// FASE 1: Procesar pago completo usando aportes y actualizar cuenta
@@ -804,17 +938,30 @@ class PresupuestoViewModel: ObservableObject {
             throw NSError(domain: "PresupuestoViewModel", code: 1, userInfo: [NSLocalizedDescriptionKey: "FamiliaId no disponible"])
         }
         
+        print("💳 INICIO: procesarPagoConAportes")
+        print("   - Cuenta: \(cuenta.nombre) - $\(cuenta.monto)")
+        print("   - Usuario pagador: \(usuario)")
+        print("   - Distribución de aportes: \(distribucion)")
+        
         let montoTotal = distribucion.reduce(0) { $0 + $1.montoAUsar }
         guard montoTotal >= cuenta.monto else {
-            throw NSError(domain: "PresupuestoViewModel", code: 3, userInfo: [NSLocalizedDescriptionKey: "El monto de los aportes no cubre el total de la cuenta"])
+            throw NSError(domain: "PresupuestoViewModel", code: 3, userInfo: [NSLocalizedDescriptionKey: "El monto de los aportes (\(montoTotal)) no cubre el total de la cuenta (\(cuenta.monto))"])
         }
         
-        // 1. Usar los aportes
+        print("✅ Validación de montos correcta: \(montoTotal) >= \(cuenta.monto)")
+        
+        // 1. Usar los aportes (esto actualiza localmente y en Firebase)
+        print("🔄 Paso 1: Actualizando aportes...")
         try await usarAportes(distribucion)
+        print("✅ Paso 1 completado: Aportes actualizados")
         
         // 2. Crear transacción con referencia a aportes utilizados
+        print("🔄 Paso 2: Creando transacción de pago...")
         let aportesUtilizados: [AporteUtilizado] = distribucion.compactMap { (aporteId, montoAUsar) -> AporteUtilizado? in
-            guard let aporte = aportes.first(where: { $0.id == aporteId }) else { return nil }
+            guard let aporte = aportes.first(where: { $0.id == aporteId }) else { 
+                print("⚠️ No se encontró aporte con ID: \(aporteId)")
+                return nil 
+            }
             return AporteUtilizado(aporteId: aporteId, usuarioAporte: aporte.usuario, montoUtilizado: montoAUsar)
         }
         
@@ -828,17 +975,23 @@ class PresupuestoViewModel: ObservableObject {
         transaccionConAportes.aportesUtilizados = aportesUtilizados
         
         try await firebaseService.crearTransaccionPago(familiaId: familiaId, transaccion: transaccionConAportes)
+        print("✅ Paso 2 completado: Transacción creada")
         
         // 3. Actualizar cuenta como pagada
+        print("🔄 Paso 3: Marcando cuenta como pagada...")
         var cuentaPagada = cuenta
         cuentaPagada.estado = .pagada
         cuentaPagada.fechaPago = Date()
         cuentaPagada.montoPagado = cuenta.monto
         
         try await firebaseService.actualizarCuenta(cuentaPagada, familiaId: familiaId)
+        print("✅ Paso 3 completado: Cuenta marcada como pagada")
         
-        // Los observadores actualizarán automáticamente los datos de aportes
-        // No es necesario recargar manualmente
+        print("🎉 PROCESO COMPLETADO: Pago procesado exitosamente")
+        print("   - Los observadores actualizarán automáticamente los datos")
+        
+        // Verificar estado final
+        await verificarEstadoFinalPago(cuentaId: cuenta.id, distribucion: distribucion)
     }
     
     /// FASE 3: Procesar pago con múltiples aportes
@@ -975,23 +1128,41 @@ class PresupuestoViewModel: ObservableObject {
             Task { @MainActor in
                 guard let self = self else { return }
                 
-                print("🔄 Observador de aportes disparado:")
+                print("🔄 OBSERVADOR DE APORTES DISPARADO:")
                 print("   - Aportes recibidos: \(aportes.count)")
+                print("   - Aportes actuales: \(self.aportes.count)")
                 
-                // Comparar con aportes actuales para ver cambios
-                for aporte in aportes {
-                    if let aporteActual = self.aportes.first(where: { $0.id == aporte.id }) {
-                        if aporteActual.montoUtilizado != aporte.montoUtilizado {
-                            print("   📊 Aporte de \(aporte.usuario) cambió:")
+                // Logging detallado de cambios
+                for aporteNuevo in aportes {
+                    if let aporteActual = self.aportes.first(where: { $0.id == aporteNuevo.id }) {
+                        if aporteActual.montoUtilizado != aporteNuevo.montoUtilizado {
+                            print("   📊 CAMBIO DETECTADO en aporte de \(aporteNuevo.usuario):")
                             print("      - Monto utilizado anterior: \(aporteActual.montoUtilizado)")
-                            print("      - Monto utilizado nuevo: \(aporte.montoUtilizado)")
-                            print("      - Saldo disponible nuevo: \(aporte.saldoDisponible)")
+                            print("      - Monto utilizado nuevo: \(aporteNuevo.montoUtilizado)")
+                            print("      - Saldo disponible anterior: \(aporteActual.saldoDisponible)")
+                            print("      - Saldo disponible nuevo: \(aporteNuevo.saldoDisponible)")
                         }
+                    } else {
+                        print("   ➕ NUEVO APORTE: \(aporteNuevo.usuario) - \(aporteNuevo.saldoDisponible) disponible")
+                    }
+                }
+                
+                // Detectar aportes eliminados
+                for aporteActual in self.aportes {
+                    if !aportes.contains(where: { $0.id == aporteActual.id }) {
+                        print("   ➖ APORTE ELIMINADO: \(aporteActual.usuario)")
                     }
                 }
                 
                 self.aportes = aportes
-                print("🔄 Aportes actualizados: \(aportes.count) aportes")
+                print("✅ Aportes actualizados localmente: \(aportes.count) aportes")
+                
+                // Logging final del estado
+                print("📊 Estado final de aportes:")
+                for aporte in self.aportes {
+                    print("   - \(aporte.usuario): utilizado=\(aporte.montoUtilizado), disponible=\(aporte.saldoDisponible)")
+                }
+                
                 self.actualizarCargaCompleta()
             }
         }
@@ -1143,5 +1314,113 @@ class PresupuestoViewModel: ObservableObject {
         await MainActor.run {
             isPerformingAction = false
         }
+    }
+    
+    // MARK: - Método de verificación del estado final del pago
+    private func verificarEstadoFinalPago(cuentaId: String, distribucion: [(aporteId: String, montoAUsar: Double)]) async {
+        print("\n🔍 VERIFICACIÓN ESTADO FINAL:")
+        
+        // Esperar un momento para que los observadores se actualicen
+        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 segundo
+        
+        print("📊 Estado de aportes después del pago:")
+        for (aporteId, montoUsado) in distribucion {
+            if let aporte = aportes.first(where: { $0.id == aporteId }) {
+                print("   - \(aporte.usuario):")
+                print("     • Monto total: \(aporte.monto)")
+                print("     • Monto utilizado: \(aporte.montoUtilizado)")
+                print("     • Saldo disponible: \(aporte.saldoDisponible)")
+                print("     • Monto usado en esta transacción: \(montoUsado)")
+            } else {
+                print("   ❌ Aporte \(aporteId) no encontrado en datos locales")
+            }
+        }
+        
+        print("💰 Saldo total disponible: \(saldoTotalDisponible)")
+        print("📱 Total aportes del mes: \(aportesDelMes.count)")
+        print("🔍 FIN VERIFICACIÓN ESTADO FINAL\n")
+        
+        // Programar verificación de consistencia con Firebase
+        Task {
+            try await Task.sleep(nanoseconds: 2_000_000_000) // 2 segundos adicionales
+            await compararAportesConFirebase()
+        }
+    }
+    
+    // MARK: - Métodos de testing y diagnóstico
+    
+    /// Método de prueba para verificar el flujo completo de pago
+    func probarFlujoPago() async {
+        print("\n🧪 === PRUEBA DE FLUJO DE PAGO ===")
+        
+        // Verificar estado inicial
+        print("📊 Estado inicial:")
+        verificarIntegracionCuentas()
+        
+        guard let cuentasVM = cuentasViewModel else {
+            print("❌ No se puede probar: CuentasViewModel no configurado")
+            return
+        }
+        
+        // Buscar una cuenta pendiente para probar
+        let cuentasPendientes = cuentasVM.cuentas.filter { $0.estado == .pendiente }
+        guard let cuentaPrueba = cuentasPendientes.first else {
+            print("❌ No hay cuentas pendientes para probar")
+            return
+        }
+        
+        print("🎯 Cuenta seleccionada para prueba: \(cuentaPrueba.nombre) - $\(cuentaPrueba.monto)")
+        
+        // Verificar si hay aportes suficientes
+        guard tieneSaldoSuficiente(para: cuentaPrueba.monto) else {
+            print("❌ No hay saldo suficiente para la prueba")
+            print("   Saldo disponible: \(saldoTotalDisponible)")
+            print("   Monto requerido: \(cuentaPrueba.monto)")
+            return
+        }
+        
+        // Calcular distribución automática
+        let distribucion = calcularDistribucionAutomatica(monto: cuentaPrueba.monto)
+        print("🔄 Distribución automática calculada: \(distribucion.count) aportes")
+        
+        // Simular el pago (sin ejecutar realmente)
+        print("🧪 SIMULACIÓN - No se ejecutará el pago real")
+        logProcesoPago(cuenta: cuentaPrueba, distribucion: distribucion.map { (aporteId: $0.aporte.id, montoAUsar: $0.montoAUsar) })
+        
+        print("🧪 === FIN PRUEBA DE FLUJO ===\n")
+    }
+    
+    /// Diagnóstico completo del estado del sistema
+    func diagnosticoCompleto() async {
+        print("\n🩺 === DIAGNÓSTICO COMPLETO ===")
+        
+        // 1. Verificar configuración
+        print("1️⃣ Verificación de configuración:")
+        verificarIntegracionCuentas()
+        
+        // 2. Estado de datos
+        print("\n2️⃣ Estado de datos:")
+        print("   📊 Presupuestos: \(presupuestos.count)")
+        print("   💰 Aportes: \(aportes.count)")
+        print("   📋 Deudas: \(deudas.count)")
+        print("   🏦 Cuentas: \(cuentasViewModel?.cuentas.count ?? 0)")
+        
+        // 3. Análisis de saldos
+        print("\n3️⃣ Análisis de saldos:")
+        print("   💵 Total aportes: \(totalAportes)")
+        print("   💳 Saldo disponible: \(saldoTotalDisponible)")
+        print("   📈 Aportes disponibles: \(aportesDisponibles.count)")
+        
+        // 4. Verificar consistencia
+        print("\n4️⃣ Verificación de consistencia:")
+        await verificarConsistenciaDatos()
+        
+        // 5. Estado de observadores
+        print("\n5️⃣ Estado de observadores:")
+        print("   🔍 Observador aportes: \(observadorAportesHandle != nil ? "Activo" : "Inactivo")")
+        print("   🔍 Observador presupuestos: \(observadorPresupuestosHandle != nil ? "Activo" : "Inactivo")")
+        print("   🔍 Observador deudas: \(observadorDeudasHandle != nil ? "Activo" : "Inactivo")")
+        
+        print("🩺 === FIN DIAGNÓSTICO ===\n")
     }
 }

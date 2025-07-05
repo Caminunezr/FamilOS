@@ -177,6 +177,9 @@ struct MainTabView: View {
         .onAppear {
             configurarViewModels()
         }
+        .onChange(of: authViewModel.familiaActual) { _ in
+            configurarViewModels()
+        }
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Menu {
@@ -206,7 +209,17 @@ struct MainTabView: View {
     }
     
     private func configurarViewModels() {
-        guard let familiaId = authViewModel.familiaActual?.id else { return }
+        print("🔧 Configurando ViewModels...")
+        print("   - Usuario actual: \(authViewModel.usuarioActual?.nombre ?? "nil")")
+        print("   - Familia actual: \(authViewModel.familiaActual?.nombre ?? "nil")")
+        print("   - Familia ID: \(authViewModel.familiaActual?.id ?? "nil")")
+        
+        guard let familiaId = authViewModel.familiaActual?.id else { 
+            print("❌ No se puede configurar ViewModels: familiaActual es nil")
+            return 
+        }
+        
+        print("✅ Configurando ViewModels con familiaId: \(familiaId)")
         
         // Configurar la integración entre ViewModels
         presupuestoViewModel.configurarIntegracionCuentas(cuentasViewModel)
@@ -214,6 +227,8 @@ struct MainTabView: View {
         // Configurar los ViewModels con la familia actual
         cuentasViewModel.configurarFamilia(familiaId)
         presupuestoViewModel.configurarFamilia(familiaId)
+        
+        print("🔧 ViewModels configurados exitosamente")
     }
 }
 

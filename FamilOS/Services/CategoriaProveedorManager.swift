@@ -27,7 +27,7 @@ class CategoriaProveedorManager: ObservableObject {
     
     /// Estructura para categorías personalizadas creadas por el usuario
     struct CategoriaPersonalizada: Codable, Identifiable {
-        let id = UUID().uuidString
+        var id: String
         var nombre: String
         var descripcion: String
         var icono: String
@@ -35,6 +35,17 @@ class CategoriaProveedorManager: ObservableObject {
         var proveedoresComunes: [String]
         var fechaCreacion: Date
         var fechaModificacion: Date
+        
+        init(nombre: String, descripcion: String, icono: String, colorHex: String, proveedoresComunes: [String] = [], fechaCreacion: Date = Date(), fechaModificacion: Date = Date()) {
+            self.id = UUID().uuidString
+            self.nombre = nombre
+            self.descripcion = descripcion
+            self.icono = icono
+            self.colorHex = colorHex
+            self.proveedoresComunes = proveedoresComunes
+            self.fechaCreacion = fechaCreacion
+            self.fechaModificacion = fechaModificacion
+        }
         
         var color: Color {
             Color(hex: colorHex) ?? .blue
@@ -54,9 +65,7 @@ class CategoriaProveedorManager: ObservableObject {
             descripcion: descripcion,
             icono: icono,
             colorHex: color.toHex(),
-            proveedoresComunes: proveedores,
-            fechaCreacion: Date(),
-            fechaModificacion: Date()
+            proveedoresComunes: proveedores
         )
         
         categoriasPersonalizadas.append(categoria)
