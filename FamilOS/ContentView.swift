@@ -154,11 +154,11 @@ struct MainTabView: View {
                 }
                 .tag(1)
             
-            PresupuestoViewModerna()
+            CalendarioPresupuestoView()
                 .environmentObject(presupuestoViewModel)
                 .environmentObject(authViewModel)
                 .tabItem {
-                    Label("Presupuesto", systemImage: "chart.pie.fill")
+                    Label("Presupuesto", systemImage: "calendar.circle.fill")
                 }
                 .tag(2)
             

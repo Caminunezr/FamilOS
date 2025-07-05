@@ -327,24 +327,8 @@ struct PresupuestoViewModerna: View {
 
 // MARK: - Supporting Views
 
-// Estas vistas serán implementadas más adelante o reutilizadas de las existentes
-struct NuevoAhorroView: View {
-    let viewModel: PresupuestoViewModel
-    
-    var body: some View {
-        VStack {
-            Text("Nuevo Ahorro")
-                .font(.title2)
-                .padding()
-            
-            // Formulario de ahorro aquí
-            
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.regularMaterial)
-    }
-}
+// Las vistas NuevoAhorroView, GraficosPresupuestoView, NuevoAporteView, y NuevaDeudaView
+// están implementadas en archivos separados en Components/PresupuestoModerno/
 
 struct DetalleDeudaView: View {
     let deuda: DeudaItem
