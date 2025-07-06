@@ -1,0 +1,263 @@
+{
+  "rules": {
+    ".read": "auth != null",
+    ".write": "auth != null",
+    
+    "test": {
+      ".read": true,
+      ".write": true
+    },
+    
+    "familias": {
+      "$familiaId": {
+        ".read": "auth != null && (root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists() || root.child('familias').child($familiaId).child('creadorId').val() == auth.uid)",
+        ".write": "auth != null && (root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists() || root.child('familias').child($familiaId).child('creadorId').val() == auth.uid || !root.child('familias').child($familiaId).exists())",
+        
+        "nombre": {
+          ".validate": "newData.isString() && newData.val().length > 0"
+        },
+        
+        "descripcion": {
+          ".validate": "newData.isString()"
+        },
+        
+        "codigo": {
+          ".validate": "newData.isString() && newData.val().length >= 6"
+        },
+        
+        "creadorId": {
+          ".validate": "newData.isString() && newData.val().length > 0"
+        },
+        
+        "fechaCreacion": {
+          ".validate": "newData.isNumber()"
+        },
+        
+        "miembros": {
+          "$userId": {
+            ".read": "auth != null",
+            ".write": "auth != null && ($userId == auth.uid || root.child('familias').child($familiaId).child('creadorId').val() == auth.uid)",
+            
+            "email": {
+              ".validate": "newData.isString() && newData.val().contains('@')"
+            },
+            
+            "nombre": {
+              ".validate": "newData.isString() && newData.val().length > 0"
+            },
+            
+            "rol": {
+              ".validate": "newData.isString() && (newData.val() == 'admin' || newData.val() == 'miembro')"
+            },
+            
+            "fechaUnion": {
+              ".validate": "newData.isNumber()"
+            }
+          }
+        },
+        
+        "cuentas": {
+          "$cuentaId": {
+            ".read": "auth != null && root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists()",
+            ".write": "auth != null && root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists()",
+            
+            "nombre": {
+              ".validate": "newData.isString() && newData.val().length > 0"
+            },
+            
+            "tipo": {
+              ".validate": "newData.isString() && (newData.val() == 'corriente' || newData.val() == 'ahorro' || newData.val() == 'credito' || newData.val() == 'inversion')"
+            },
+            
+            "saldo": {
+              ".validate": "newData.isNumber()"
+            },
+            
+            "entidad": {
+              ".validate": "newData.isString() && newData.val().length > 0"
+            },
+            
+            "responsable": {
+              ".validate": "newData.isString() && newData.val().length > 0"
+            },
+            
+            "fechaCreacion": {
+              ".validate": "newData.isNumber()"
+            },
+            
+            "activa": {
+              ".validate": "newData.isBoolean()"
+            }
+          }
+        },
+        
+        "aportes": {
+          "$aporteId": {
+            ".read": "auth != null && root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists()",
+            ".write": "auth != null && root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists()",
+            
+            "usuario": {
+              ".validate": "newData.isString() && newData.val().length > 0"
+            },
+            
+            "monto": {
+              ".validate": "newData.isNumber() && newData.val() > 0"
+            },
+            
+            "utilizado": {
+              ".validate": "newData.isNumber() && newData.val() >= 0"
+            },
+            
+            "fecha": {
+              ".validate": "newData.isNumber()"
+            },
+            
+            "mes": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 12"
+            },
+            
+            "año": {
+              ".validate": "newData.isNumber() && newData.val() >= 2020"
+            },
+            
+            "comentario": {
+              ".validate": "newData.isString()"
+            }
+          }
+        },
+        
+        "presupuestos": {
+          "$presupuestoId": {
+            ".read": "auth != null && root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists()",
+            ".write": "auth != null && root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists()",
+            
+            "mes": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 12"
+            },
+            
+            "año": {
+              ".validate": "newData.isNumber() && newData.val() >= 2020"
+            },
+            
+            "montoPlanificado": {
+              ".validate": "newData.isNumber() && newData.val() >= 0"
+            },
+            
+            "montoReal": {
+              ".validate": "newData.isNumber() && newData.val() >= 0"
+            },
+            
+            "fechaCreacion": {
+              ".validate": "newData.isNumber()"
+            },
+            
+            "fechaCierre": {
+              ".validate": "newData.isNumber() || newData.val() == null"
+            },
+            
+            "cerrado": {
+              ".validate": "newData.isBoolean()"
+            },
+            
+            "categorias": {
+              "$categoriaId": {
+                ".validate": "newData.hasChildren(['nombre', 'presupuesto', 'gastado'])",
+                
+                "nombre": {
+                  ".validate": "newData.isString() && newData.val().length > 0"
+                },
+                
+                "presupuesto": {
+                  ".validate": "newData.isNumber() && newData.val() >= 0"
+                },
+                
+                "gastado": {
+                  ".validate": "newData.isNumber() && newData.val() >= 0"
+                }
+              }
+            }
+          }
+        },
+        
+        "deudas": {
+          "$deudaId": {
+            ".read": "auth != null && root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists()",
+            ".write": "auth != null && root.child('familias').child($familiaId).child('miembros').child(auth.uid).exists()",
+            
+            "descripcion": {
+              ".validate": "newData.isString() && newData.val().length > 0"
+            },
+            
+            "monto": {
+              ".validate": "newData.isNumber() && newData.val() > 0"
+            },
+            
+            "responsable": {
+              ".validate": "newData.isString() && newData.val().length > 0"
+            },
+            
+            "fechaCreacion": {
+              ".validate": "newData.isNumber()"
+            },
+            
+            "fechaVencimiento": {
+              ".validate": "newData.isNumber() || newData.val() == null"
+            },
+            
+            "fechaPago": {
+              ".validate": "newData.isNumber() || newData.val() == null"
+            },
+            
+            "pagado": {
+              ".validate": "newData.isBoolean()"
+            },
+            
+            "mes": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 12"
+            },
+            
+            "año": {
+              ".validate": "newData.isNumber() && newData.val() >= 2020"
+            },
+            
+            "categoria": {
+              ".validate": "newData.isString() && newData.val().length > 0"
+            },
+            
+            "tipo": {
+              ".validate": "newData.isString() && (newData.val() == 'gasto' || newData.val() == 'deuda')"
+            }
+          }
+        }
+      }
+    },
+    
+    "usuarios": {
+      "$userId": {
+        ".read": "auth != null && ($userId == auth.uid || root.child('usuarios').child($userId).child('familiaId').val() == root.child('usuarios').child(auth.uid).child('familiaId').val())",
+        ".write": "auth != null && $userId == auth.uid",
+        
+        "email": {
+          ".validate": "newData.isString() && newData.val().contains('@')"
+        },
+        
+        "nombre": {
+          ".validate": "newData.isString() && newData.val().length > 0"
+        },
+        
+        "familiaId": {
+          ".validate": "newData.isString() || newData.val() == null"
+        },
+        
+        "fechaRegistro": {
+          ".validate": "newData.isNumber()"
+        },
+        
+        "configuracion": {
+          ".read": "auth != null && $userId == auth.uid",
+          ".write": "auth != null && $userId == auth.uid"
+        }
+      }
+    }
+  }
+}
