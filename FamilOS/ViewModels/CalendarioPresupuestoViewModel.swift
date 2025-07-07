@@ -140,6 +140,7 @@ class CalendarioPresupuestoViewModel: ObservableObject {
         
         // Calcular totales
         let totalAportes = aportesDelMes.reduce(0) { $0 + $1.monto }
+        let totalAportesUtilizados = aportesDelMes.reduce(0) { $0 + $1.montoUtilizado }
         let totalGastos = deudasDelMes.reduce(0) { $0 + $1.monto }
         let saldoDisponible = aportesDelMes.reduce(0) { $0 + $1.saldoDisponible }
         
@@ -149,6 +150,7 @@ class CalendarioPresupuestoViewModel: ObservableObject {
             aportes: aportesDelMes,
             deudas: deudasDelMes,
             totalAportes: totalAportes,
+            totalAportesUtilizados: totalAportesUtilizados,
             totalGastos: totalGastos,
             saldoDisponible: saldoDisponible
         )
@@ -160,6 +162,7 @@ class CalendarioPresupuestoViewModel: ObservableObject {
             nombre: mes.nombreMes(),
             presupuesto: presupuesto,
             totalAportes: totalAportes,
+            totalAportesUtilizados: totalAportesUtilizados,
             totalGastos: totalGastos,
             saldoDisponible: saldoDisponible,
             cantidadTransacciones: deudasDelMes.count,
@@ -173,6 +176,7 @@ class CalendarioPresupuestoViewModel: ObservableObject {
         aportes: [Aporte],
         deudas: [DeudaItem],
         totalAportes: Double,
+        totalAportesUtilizados: Double,
         totalGastos: Double,
         saldoDisponible: Double
     ) -> [AlertaFinancieraCalendario] {

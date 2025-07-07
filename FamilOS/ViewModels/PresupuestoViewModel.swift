@@ -1423,4 +1423,92 @@ class PresupuestoViewModel: ObservableObject {
         
         print("🩺 === FIN DIAGNÓSTICO ===\n")
     }
+    
+    // MARK: - Registro de Gastos con Distribución Automática de Aportes
+    
+    /// Registra un gasto distribuyéndolo automáticamente entre los aportes disponibles
+    func registrarGasto(descripcion: String, monto: Double, categoria: String = "General", responsable: String) async throws {
+        guard let familiaId = familiaId else {
+            throw NSError(domain: "PresupuestoViewModel", code: 1, userInfo: [NSLocalizedDescriptionKey: "FamiliaId no disponible"])
+        }
+        
+        guard monto > 0 else {
+            throw NSError(domain: "PresupuestoViewModel", code: 2, userInfo: [NSLocalizedDescriptionKey: "El monto debe ser mayor a 0"])
+        }
+        
+        print("💸 REGISTRO DE GASTO:")
+        print("   - Descripción: \(descripcion)")
+        print("   - Monto: \(monto)")
+        print("   - Categoría: \(categoria)")
+        print("   - Responsable: \(responsable)")
+        
+        // 1. Verificar que hay aportes suficientes
+        let totalDisponible = aportes.reduce(0) { $0 + $1.saldoDisponible }
+        guard totalDisponible >= monto else {
+            throw NSError(domain: "PresupuestoViewModel", code: 3, userInfo: [NSLocalizedDescriptionKey: "Saldo insuficiente. Disponible: \(totalDisponible), Requerido: \(monto)"])
+        }
+        
+        // 2. Calcular distribución automática
+        let distribucion = calcularDistribucionAutomatica(montoTotal: monto)
+        
+        print("📊 Distribución calculada:")
+        for (aporteId, montoDistribuido) in distribucion {
+            if let aporte = aportes.first(where: { $0.id == aporteId }) {
+                print("   - \(aporte.usuario): \(montoDistribuido)")
+            }
+        }
+        
+        // 3. Usar los aportes (actualiza localmente y en Firebase)
+        try await usarAportes(distribucion)
+        
+        // 4. Crear el gasto como deuda pagada
+        let gasto = DeudaItem(
+            id: UUID().uuidString,
+            descripcion: descripcion,
+            monto: monto,
+            categoria: categoria,
+            fechaRegistro: Date(),
+            esPagado: true,
+            responsable: responsable
+        )
+        
+        // 5. Guardar el gasto en Firebase
+        try await firebaseService.crearDeuda(gasto, familiaId: familiaId)
+        
+        print("✅ Gasto registrado exitosamente")
+    }
+    
+    /// Calcula la distribución automática de un monto entre los aportes disponibles
+    private func calcularDistribucionAutomatica(montoTotal: Double) -> [(aporteId: String, montoAUsar: Double)] {
+        var distribucion: [(aporteId: String, montoAUsar: Double)] = []
+        var montoRestante = montoTotal
+        
+        // Filtrar aportes con saldo disponible y ordenar por saldo disponible descendente
+        let aportesDisponibles = aportes
+            .filter { $0.saldoDisponible > 0 }
+            .sorted { $0.saldoDisponible > $1.saldoDisponible }
+        
+        print("💰 Aportes disponibles para distribución:")
+        for aporte in aportesDisponibles {
+            print("   - \(aporte.usuario): \(aporte.saldoDisponible) disponible")
+        }
+        
+        // Distribuir el monto entre los aportes disponibles
+        for aporte in aportesDisponibles {
+            if montoRestante <= 0 { break }
+            
+            let montoAUsar = min(aporte.saldoDisponible, montoRestante)
+            if montoAUsar > 0 {
+                distribucion.append((aporteId: aporte.id, montoAUsar: montoAUsar))
+                montoRestante -= montoAUsar
+                print("🔄 Distribuyendo \(montoAUsar) del aporte de \(aporte.usuario)")
+            }
+        }
+        
+        if montoRestante > 0 {
+            print("⚠️ Advertencia: No se pudo distribuir completamente el monto. Restante: \(montoRestante)")
+        }
+        
+        return distribucion
+    }
 }

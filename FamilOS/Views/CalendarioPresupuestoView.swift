@@ -8,53 +8,33 @@ struct CalendarioPresupuestoView: View {
     @State private var mesSeleccionado: MesPresupuestoInfo?
     @State private var mostrarDetalleMes = false
     @State private var mostrarEstadisticas = false
-    @State private var vistaActual: VistaPresupuesto = .calendario
-    
-    enum VistaPresupuesto: String, CaseIterable {
-        case calendario = "Calendario"
-        case mensual = "Mensual"
-        case moderna = "Moderna"
-        
-        var icono: String {
-            switch self {
-            case .calendario: return "calendar"
-            case .mensual: return "list.bullet"
-            case .moderna: return "rectangle.grid.2x2"
-            }
-        }
-    }
+    // Vista simplificada - solo calendario
     
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Header con selector de vista
+                // Header simplificado - solo selector de año
                 headerView
                 
-                // Contenido principal
-                contenidoPrincipal
+                // Contenido del calendario
+                calendarioView
             }
             .navigationTitle("Presupuesto Familiar")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
-                        if vistaActual == .calendario {
-                            Button("📊 Estadísticas del Año") {
-                                mostrarEstadisticas = true
-                            }
-                            
-                            Button("💰 Crear Presupuesto Rápido") {
-                                crearPresupuestoRapido()
-                            }
-                            
-                            Divider()
-                            
-                            Button("📤 Exportar Datos del Año") {
-                                exportarDatosAño()
-                            }
-                        } else {
-                            Button("💰 Nuevo Aporte") {
-                                // Acción para nuevo aporte en vista mensual
-                            }
+                        Button("📊 Estadísticas del Año") {
+                            mostrarEstadisticas = true
+                        }
+                        
+                        Button("💰 Crear Presupuesto Rápido") {
+                            crearPresupuestoRapido()
+                        }
+                        
+                        Divider()
+                        
+                        Button("📤 Exportar Datos del Año") {
+                            exportarDatosAño()
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle.fill")
@@ -81,9 +61,7 @@ struct CalendarioPresupuestoView: View {
         }
         .onChange(of: presupuestoViewModel.mesSeleccionado) { _, nuevoMes in
             // Sincronizar con cambios externos del mes seleccionado
-            if vistaActual != .calendario {
-                sincronizarMesSeleccionado(nuevoMes)
-            }
+            sincronizarMesSeleccionado(nuevoMes)
         }
     }
     
@@ -91,46 +69,16 @@ struct CalendarioPresupuestoView: View {
     
     private var headerView: some View {
         VStack(spacing: 16) {
-            // Selector de vista
-            Picker("Vista", selection: $vistaActual) {
-                ForEach(VistaPresupuesto.allCases, id: \.self) { vista in
-                    Label(vista.rawValue, systemImage: vista.icono)
-                        .tag(vista)
+            // Selector de año
+            SelectorAñoView(
+                añoSeleccionado: $viewModel.añoActual,
+                onCambioAño: { nuevoAño in
+                    viewModel.cargarDatosAño(nuevoAño)
                 }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
-            
-            // Selector de año (solo para vista calendario)
-            if vistaActual == .calendario {
-                SelectorAñoView(
-                    añoSeleccionado: $viewModel.añoActual,
-                    onCambioAño: { nuevoAño in
-                        viewModel.cargarDatosAño(nuevoAño)
-                    }
-                )
-            }
+            )
         }
         .padding(.vertical)
         .background(.regularMaterial)
-    }
-    
-    private var contenidoPrincipal: some View {
-        Group {
-            switch vistaActual {
-            case .calendario:
-                calendarioView
-            case .mensual:
-                PresupuestoView()
-                    .environmentObject(presupuestoViewModel)
-                    .environmentObject(authViewModel)
-            case .moderna:
-                PresupuestoViewModerna()
-                    .environmentObject(presupuestoViewModel)
-                    .environmentObject(authViewModel)
-            }
-        }
-        .animation(.easeInOut(duration: 0.3), value: vistaActual)
     }
     
     private var calendarioView: some View {

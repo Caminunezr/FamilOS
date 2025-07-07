@@ -10,9 +10,10 @@ struct MesPresupuestoInfo: Identifiable, Hashable {
     let fecha: Date
     let nombre: String
     let presupuesto: PresupuestoMensual?
-    let totalAportes: Double
+    let totalAportes: Double          // Suma de todos los montos aportados
+    let totalAportesUtilizados: Double // Suma de todos los montos utilizados
     let totalGastos: Double
-    let saldoDisponible: Double
+    let saldoDisponible: Double       // totalAportes - totalAportesUtilizados
     let cantidadTransacciones: Int
     let estaCerrado: Bool
     let alertas: [AlertaFinancieraCalendario]
@@ -20,6 +21,10 @@ struct MesPresupuestoInfo: Identifiable, Hashable {
     // Computed properties
     var tienePresupuesto: Bool {
         presupuesto != nil
+    }
+    
+    var totalAportesDisponibles: Double {
+        saldoDisponible
     }
     
     var saldoFinal: Double {
@@ -131,5 +136,39 @@ extension Int {
         formatter.dateFormat = "MMMM"
         let date = Calendar.current.date(from: DateComponents(month: self)) ?? Date()
         return formatter.string(from: date).capitalized
+    }
+}
+
+// MARK: - Extensión para previews
+
+extension MesPresupuestoInfo {
+    /// Crea un ejemplo de MesPresupuestoInfo para usar en previews
+    static var ejemplo: MesPresupuestoInfo {
+        let fechaActual = Date()
+        let calendar = Calendar.current
+        let mes = calendar.component(.month, from: fechaActual)
+        let año = calendar.component(.year, from: fechaActual)
+        
+        return MesPresupuestoInfo(
+            mes: mes,
+            año: año,
+            fecha: fechaActual,
+            nombre: mes.nombreMes(),
+            presupuesto: nil,
+            totalAportes: 300000,
+            totalAportesUtilizados: 120000,
+            totalGastos: 150000,
+            saldoDisponible: 180000,
+            cantidadTransacciones: 12,
+            estaCerrado: false,
+            alertas: [
+                AlertaFinancieraCalendario(
+                    tipo: .saldoBajo,
+                    mensaje: "Ejemplo de alerta para previews",
+                    color: .orange,
+                    icono: "exclamationmark.triangle.fill"
+                )
+            ]
+        )
     }
 }

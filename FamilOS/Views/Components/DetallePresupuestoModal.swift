@@ -8,6 +8,17 @@ struct DetallePresupuestoModal: View {
     
     @State private var mostrarVistaCompleta = false
     @State private var isLoading = false
+    @State private var mostrarModalGasto = false
+    @State private var mostrarModalAporte = false
+    @State private var mostrarAlertaEliminarAporte = false
+    @State private var aporteAEliminar: Aporte?
+    @State private var vistaGastos: VistaGastos = .todos
+    
+    enum VistaGastos: String, CaseIterable {
+        case todos = "Todos"
+        case pagados = "Pagados"
+        case pendientes = "Pendientes"
+    }
     
     var body: some View {
         NavigationStack {
@@ -17,69 +28,65 @@ struct DetallePresupuestoModal: View {
                     headerDetalleMes
                     
                     // Resumen financiero detallado
-                    resumenFinancieroDetallado
-                    
-                    // Vista de componentes reutilizados de la app
-                    if mesInfo.tienePresupuesto {
-                        componentesPresupuesto
+                    if !presupuestoViewModel.aportes.isEmpty {
+                        resumenFinancieroCompleto
                     } else {
-                        vistaPresupuestoVacio
+                        noDataView(mensaje: "No hay aportes registrados")
                     }
+                    
+                    // Gastos del mes mejorado
+                    gastosDelMesMejorado
                 }
-                .padding(24)
+                .padding(.horizontal)
             }
-            .navigationTitle("Detalle \(mesInfo.nombre) \(mesInfo.año)")
+            .background(.regularMaterial)
+            .navigationTitle("Detalle del Mes")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cerrar") { 
-                        dismiss() 
+                    Button("Cerrar") {
+                        dismiss()
                     }
+                    .foregroundStyle(.blue)
                 }
                 
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
-                        Button("📋 Abrir Vista Completa") {
-                            abrirVistaCompleta()
+                        Button {
+                            mostrarModalAporte = true
+                        } label: {
+                            Label("Agregar Aporte", systemImage: "plus.circle")
                         }
                         
-                        if !mesInfo.estaCerrado {
-                            Divider()
-                            
-                            Button("💰 Agregar Aporte") {
-                                agregarAporte()
-                            }
-                            
-                            Button("💳 Registrar Gasto") {
-                                registrarGasto()
-                            }
-                            
-                            if mesInfo.tienePresupuesto && mesInfo.saldoFinal > 0 {
-                                Divider()
-                                
-                                Button("🔒 Cerrar Mes") {
-                                    cerrarMes()
-                                }
-                            }
-                        }
-                        
-                        Divider()
-                        
-                        Button("📊 Ver Estadísticas") {
-                            // TODO: Implementar vista de estadísticas del mes
-                        }
-                        
-                        Button("📤 Exportar Datos") {
-                            exportarDatosMes()
+                        Button {
+                            mostrarModalGasto = true
+                        } label: {
+                            Label("Registrar Gasto", systemImage: "minus.circle")
                         }
                     } label: {
-                        Image(systemName: "ellipsis.circle.fill")
+                        Image(systemName: "plus")
                     }
                 }
             }
         }
-        .onAppear {
-            // Sincronizar el mes seleccionado en el PresupuestoViewModel
-            presupuestoViewModel.mesSeleccionado = mesInfo.fecha
+        .sheet(isPresented: $mostrarModalGasto) {
+            NuevaDeudaView(viewModel: presupuestoViewModel)
+                .environmentObject(authViewModel)
+        }
+        .sheet(isPresented: $mostrarModalAporte) {
+            NuevoAporteView(viewModel: presupuestoViewModel)
+                .environmentObject(authViewModel)
+        }
+        .alert("Eliminar Aporte", isPresented: $mostrarAlertaEliminarAporte) {
+            Button("Cancelar", role: .cancel) { }
+            Button("Eliminar", role: .destructive) {
+                if let aporte = aporteAEliminar {
+                    eliminarAporte(aporte)
+                }
+            }
+        } message: {
+            if let aporte = aporteAEliminar {
+                Text("¿Estás seguro de que quieres eliminar el aporte de \(aporte.monto.formatearComoMoneda()) de \(aporte.usuario)? Esta acción no se puede deshacer.")
+            }
         }
     }
     
@@ -94,333 +101,80 @@ struct DetallePresupuestoModal: View {
                         .font(.title)
                         .fontWeight(.bold)
                     
-                    Text(estadoDescripcion)
+                    Text("Balance: \(mesInfo.saldoFinal.formatearComoMoneda())")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(mesInfo.saldoFinal >= 0 ? .green : .red)
                 }
                 
                 Spacer()
                 
-                estadoBadge
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("\(mesInfo.cantidadTransacciones)")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.blue)
+                    
+                    Text("transacciones")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             
             // Métricas principales
-            HStack(spacing: 20) {
-                MetricaCard(
-                    titulo: "Aportado", 
-                    valor: mesInfo.totalAportes, 
-                    color: .green
-                )
-                MetricaCard(
-                    titulo: "Gastado", 
-                    valor: mesInfo.totalGastos, 
-                    color: .orange
-                )
-                MetricaCard(
-                    titulo: "Saldo", 
-                    valor: mesInfo.saldoDisponible, 
-                    color: mesInfo.saldoDisponible >= 0 ? .blue : .red
-                )
-            }
-            
-            // Alertas del mes
-            if !mesInfo.alertas.isEmpty {
-                alertasMes
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 12) {
+                MetricaCard(titulo: "Aportado", valor: mesInfo.totalAportes, color: .green)
+                MetricaCard(titulo: "Gastado", valor: mesInfo.totalGastos, color: .orange)
+                MetricaCard(titulo: "Balance", valor: mesInfo.saldoFinal, color: mesInfo.saldoFinal >= 0 ? .green : .red)
             }
         }
-        .padding(20)
-        .background {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .primary.opacity(0.1), radius: 8, x: 0, y: 4)
-        }
-    }
-    
-    private var resumenFinancieroDetallado: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("Resumen Financiero")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                
-                Spacer()
-                
-                if mesInfo.cantidadTransacciones > 0 {
-                    Text("\(mesInfo.cantidadTransacciones) transacciones")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(.ultraThinMaterial))
-                }
-            }
-            
-            // Gráfico de progreso
-            if mesInfo.tienePresupuesto {
-                progresoMes
-            }
-            
-            // Balance final
-            balanceFinal
-        }
-        .padding(16)
+        .padding()
         .background {
             RoundedRectangle(cornerRadius: 12)
-                .fill(.regularMaterial)
+                .fill(.ultraThinMaterial)
         }
     }
     
-    private var componentesPresupuesto: some View {
-        VStack(spacing: 20) {
-            // Reutilizar componentes existentes de la app
-            if presupuestoViewModel.mesSeleccionado.esMismoMes(que: mesInfo.fecha) {
+    private var resumenFinancieroCompleto: some View {
+        VStack(spacing: 16) {
+            // Header de aportes
+            HStack {
+                Text("Aportes del Mes")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 
-                // Resumen financiero (reutilizando componente existente)
-                Group {
-                    Text("Aportes del Mes")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    
-                    // Lista simplificada de aportes
-                    if !presupuestoViewModel.aportesDelMes.isEmpty {
-                        VStack(spacing: 8) {
-                            ForEach(presupuestoViewModel.aportesDelMes.prefix(3)) { aporte in
-                                AporteResumenRow(aporte: aporte)
-                            }
-                            
-                            if presupuestoViewModel.aportesDelMes.count > 3 {
-                                Text("+ \(presupuestoViewModel.aportesDelMes.count - 3) aportes más")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                        }
-                        .padding()
-                        .background {
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(.regularMaterial)
-                        }
-                    } else {
-                        noDataView(mensaje: "No hay aportes registrados")
-                    }
-                }                    // Transacciones/Gastos del mes
-                    Group {
-                        Text("Gastos del Mes")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        
-                        if !presupuestoViewModel.deudasDelMes.isEmpty {
-                            VStack(spacing: 8) {
-                                ForEach(presupuestoViewModel.deudasDelMes.prefix(3)) { deuda in
-                                    DeudaResumenRow(deuda: deuda)
-                                }
-                                
-                                if presupuestoViewModel.deudasDelMes.count > 3 {
-                                    Text("+ \(presupuestoViewModel.deudasDelMes.count - 3) gastos más")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                            }
-                            .padding()
-                            .background {
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(.regularMaterial)
-                            }
-                        } else {
-                            noDataView(mensaje: "No hay gastos registrados")
-                        }
-                    }
+                Button("Ver Todo") {
+                    mostrarVistaCompleta.toggle()
+                }
+                .font(.caption)
+                .foregroundStyle(.blue)
             }
-        }
-    }
-    
-    private var vistaPresupuestoVacio: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "calendar.badge.plus")
-                .font(.system(size: 60))
-                .foregroundStyle(.gray)
             
-            Text("Sin Presupuesto")
-                .font(.title2)
-                .fontWeight(.semibold)
-            
-            Text("Este mes no tiene un presupuesto creado. Crea uno para comenzar a gestionar tus finanzas.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            
-            Button("Crear Presupuesto") {
-                crearPresupuestoParaMes()
-            }
-            .buttonStyle(.borderedProminent)
-        }
-        .padding()
-        .frame(maxWidth: .infinity)
-    }
-    
-    private var estadoBadge: some View {
-        Group {
-            switch mesInfo.estadoMes {
-            case .cerrado:
-                Label("Cerrado", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(.green.opacity(0.2)))
-            case .activo:
-                Label("Activo", systemImage: "circle.fill")
+            // Lista de aportes
+            VStack(spacing: 8) {
+                let aportesAMostrar = mostrarVistaCompleta ? presupuestoViewModel.aportes : Array(presupuestoViewModel.aportes.prefix(3))
+                
+                ForEach(aportesAMostrar) { aporte in
+                    AporteResumenRow(aporte: aporte) {
+                        aporteAEliminar = aporte
+                        mostrarAlertaEliminarAporte = true
+                    }
+                }
+                
+                if !mostrarVistaCompleta && presupuestoViewModel.aportes.count > 3 {
+                    Button("Ver \(presupuestoViewModel.aportes.count - 3) más") {
+                        mostrarVistaCompleta = true
+                    }
+                    .font(.caption)
                     .foregroundStyle(.blue)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(.blue.opacity(0.2)))
-            case .vacio:
-                Label("Sin presupuesto", systemImage: "circle")
-                    .foregroundStyle(.gray)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(.gray.opacity(0.2)))
-            }
-        }
-        .font(.caption)
-        .fontWeight(.medium)
-    }
-    
-    private var alertasMes: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Alertas")
-                .font(.subheadline)
-                .fontWeight(.medium)
-            
-            ForEach(mesInfo.alertas) { alerta in
-                HStack {
-                    Image(systemName: alerta.icono)
-                        .foregroundStyle(alerta.color)
-                    Text(alerta.mensaje)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
+                    .padding(.top, 4)
                 }
             }
         }
         .padding()
         .background {
             RoundedRectangle(cornerRadius: 10)
-                .fill(.orange.opacity(0.1))
+                .fill(.regularMaterial)
         }
-    }
-    
-    private var progresoMes: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Text("Progreso del gasto")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                
-                Spacer()
-                
-                Text("\(Int(mesInfo.porcentajeGastado * 100))%")
-                    .font(.subheadline)
-                    .fontWeight(.bold)
-                    .foregroundStyle(colorProgreso)
-            }
-            
-            ProgressView(value: min(mesInfo.porcentajeGastado, 1.0), total: 1.0)
-                .progressViewStyle(LinearProgressViewStyle())
-                .tint(colorProgreso)
-        }
-    }
-    
-    private var balanceFinal: some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text("Balance Final")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                
-                Text(mesInfo.saldoFinal.formatearComoMoneda())
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundStyle(mesInfo.saldoFinal >= 0 ? .green : .red)
-            }
-            
-            Spacer()
-            
-            Image(systemName: mesInfo.saldoFinal >= 0 ? "arrow.up.circle.fill" : "arrow.down.circle.fill")
-                .font(.title)
-                .foregroundStyle(mesInfo.saldoFinal >= 0 ? .green : .red)
-        }
-        .padding()
-        .background {
-            RoundedRectangle(cornerRadius: 10)
-                .fill((mesInfo.saldoFinal >= 0 ? Color.green : Color.red).opacity(0.1))
-        }
-    }
-    
-    // MARK: - Computed Properties
-    
-    private var estadoDescripcion: String {
-        switch mesInfo.estadoMes {
-        case .cerrado:
-            return "Mes cerrado y finalizado"
-        case .activo:
-            return "Presupuesto activo y en uso"
-        case .vacio:
-            return "No hay presupuesto creado"
-        }
-    }
-    
-    private var colorProgreso: Color {
-        if mesInfo.porcentajeGastado > 1.0 {
-            return .red
-        } else if mesInfo.porcentajeGastado > 0.8 {
-            return .orange
-        } else {
-            return .green
-        }
-    }
-    
-    // MARK: - Funciones
-    
-    private func abrirVistaCompleta() {
-        presupuestoViewModel.mesSeleccionado = mesInfo.fecha
-        mostrarVistaCompleta = true
-        dismiss()
-    }
-    
-    private func agregarAporte() {
-        // TODO: Implementar adición de aporte
-        presupuestoViewModel.mesSeleccionado = mesInfo.fecha
-        dismiss()
-    }
-    
-    private func registrarGasto() {
-        // TODO: Implementar registro de gasto
-        presupuestoViewModel.mesSeleccionado = mesInfo.fecha
-        dismiss()
-    }
-    
-    private func cerrarMes() {
-        Task {
-            isLoading = true
-            await presupuestoViewModel.cerrarMes()
-            isLoading = false
-            dismiss()
-        }
-    }
-    
-    private func crearPresupuestoParaMes() {
-        Task {
-            isLoading = true
-            presupuestoViewModel.mesSeleccionado = mesInfo.fecha
-            await presupuestoViewModel.crearPresupuestoMes()
-            isLoading = false
-        }
-    }
-    
-    private func exportarDatosMes() {
-        // TODO: Implementar exportación de datos del mes
-        print("📤 Exportando datos de \(mesInfo.nombre) \(mesInfo.año)")
     }
     
     private func noDataView(mensaje: String) -> some View {
@@ -439,6 +193,122 @@ struct DetallePresupuestoModal: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(.gray.opacity(0.1))
         }
+    }
+    
+    // MARK: - Vista mejorada de Gastos del Mes
+    
+    private var gastosDelMesMejorado: some View {
+        Group {
+            HStack {
+                Text("Gastos del Mes")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                
+                // Selector de filtro
+                Picker("Vista", selection: $vistaGastos) {
+                    ForEach(VistaGastos.allCases, id: \.self) { vista in
+                        Text(vista.rawValue).tag(vista)
+                    }
+                }
+                .pickerStyle(SegmentedPickerStyle())
+                .frame(width: 200)
+            }
+            
+            if !presupuestoViewModel.deudasDelMes.isEmpty {
+                VStack(spacing: 16) {
+                    // Cards de resumen
+                    resumenGastos
+                    
+                    // Lista de gastos filtrada
+                    listaGastosFiltrada
+                }
+                .padding()
+                .background {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(.regularMaterial)
+                }
+            } else {
+                noDataView(mensaje: "No hay gastos registrados")
+            }
+        }
+    }
+    
+    private var resumenGastos: some View {
+        HStack(spacing: 12) {
+            // Total general
+            CardResumenGasto(
+                titulo: "Total",
+                monto: totalGastos,
+                color: .blue,
+                icono: "creditcard"
+            )
+            
+            // Pagado
+            CardResumenGasto(
+                titulo: "Pagado",
+                monto: totalPagado,
+                color: .green,
+                icono: "checkmark.circle.fill"
+            )
+            
+            // Pendiente
+            CardResumenGasto(
+                titulo: "Pendiente",
+                monto: totalPendiente,
+                color: .orange,
+                icono: "clock.fill"
+            )
+        }
+    }
+    
+    private var listaGastosFiltrada: some View {
+        VStack(spacing: 8) {
+            ForEach(gastosFiltrados) { deuda in
+                FilaActividadFinanciera(deuda: deuda)
+            }
+            
+            if gastosFiltrados.count < deudasSegunFiltro.count {
+                Button("Ver todos (\(deudasSegunFiltro.count) gastos)") {
+                    // Expandir lista completa
+                }
+                .font(.caption)
+                .foregroundStyle(.blue)
+            }
+        }
+    }
+    
+    // MARK: - Computed Properties para filtros
+    private var deudasSegunFiltro: [DeudaItem] {
+        switch vistaGastos {
+        case .todos:
+            return presupuestoViewModel.deudasDelMes
+        case .pagados:
+            return presupuestoViewModel.deudasDelMes.filter { $0.esPagado }
+        case .pendientes:
+            return presupuestoViewModel.deudasDelMes.filter { !$0.esPagado }
+        }
+    }
+    
+    private var gastosFiltrados: [DeudaItem] {
+        Array(deudasSegunFiltro.prefix(5)) // Mostrar máximo 5 elementos
+    }
+    
+    private var totalGastos: Double {
+        presupuestoViewModel.deudasDelMes.reduce(0) { $0 + $1.monto }
+    }
+    
+    private var totalPagado: Double {
+        presupuestoViewModel.deudasDelMes.filter { $0.esPagado }.reduce(0) { $0 + $1.monto }
+    }
+    
+    private var totalPendiente: Double {
+        presupuestoViewModel.deudasDelMes.filter { !$0.esPagado }.reduce(0) { $0 + $1.monto }
+    }
+    
+    // MARK: - Acciones
+    
+    private func eliminarAporte(_ aporte: Aporte) {
+        presupuestoViewModel.eliminarAporte(id: aporte.id)
     }
 }
 
@@ -470,8 +340,77 @@ struct MetricaCard: View {
     }
 }
 
+struct CardResumenGasto: View {
+    let titulo: String
+    let monto: Double
+    let color: Color
+    let icono: String
+    
+    var body: some View {
+        VStack(spacing: 4) {
+            Image(systemName: icono)
+                .font(.title2)
+                .foregroundStyle(color)
+            
+            Text(titulo)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            
+            Text(monto, format: .currency(code: Locale.current.currency?.identifier ?? "USD"))
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(color)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(12)
+        .background {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(color.opacity(0.1))
+        }
+    }
+}
+
+struct FilaActividadFinanciera: View {
+    let deuda: DeudaItem
+    
+    var body: some View {
+        HStack {
+            // Icono de estado
+            Image(systemName: deuda.esPagado ? "checkmark.circle.fill" : "clock.fill")
+                .foregroundStyle(deuda.esPagado ? .green : .orange)
+                .frame(width: 20)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(deuda.descripcion)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                if !deuda.categoria.isEmpty {
+                    Text(deuda.categoria)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(deuda.monto, format: .currency(code: Locale.current.currency?.identifier ?? "USD"))
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                
+                Text(deuda.esPagado ? "Pagado" : "Pendiente")
+                    .font(.caption)
+                    .foregroundStyle(deuda.esPagado ? .green : .orange)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
 struct AporteResumenRow: View {
     let aporte: Aporte
+    let onEliminar: () -> Void
     
     var body: some View {
         HStack {
@@ -503,6 +442,14 @@ struct AporteResumenRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            
+            Button(action: onEliminar) {
+                Image(systemName: "trash")
+                    .foregroundStyle(.red)
+                    .font(.caption)
+            }
+            .buttonStyle(.borderless)
+            .padding(.leading, 8)
         }
     }
 }

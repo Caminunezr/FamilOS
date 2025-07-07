@@ -144,26 +144,32 @@ struct TarjetaMesView: View {
                 }
             }
             
-            // Saldo disponible (más prominente)
-            if mesInfo.tienePresupuesto {
-                HStack {
-                    Text("Saldo:")
+            // Fila de Utilizado y Disponible  
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Utilizado")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     
-                    Spacer()
+                    Text(mesInfo.totalAportesUtilizados.formatearComoMoneda())
+                        .font(.callout)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.purple)
+                        .lineLimit(1)
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Disponible")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     
                     Text(mesInfo.saldoDisponible.formatearComoMoneda())
                         .font(.callout)
-                        .fontWeight(.bold)
-                        .foregroundStyle(mesInfo.saldoDisponible >= 0 ? .blue : .red)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.blue)
                         .lineLimit(1)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill((mesInfo.saldoDisponible >= 0 ? Color.blue : Color.red).opacity(0.1))
                 }
             }
         }
@@ -274,7 +280,8 @@ struct TarjetaMesView: View {
         nombre: "Julio",
         presupuesto: nil,
         totalAportes: 150000,
-        totalGastos: 120000,
+        totalAportesUtilizados: 120000,
+        totalGastos: 90000,
         saldoDisponible: 30000,
         cantidadTransacciones: 5,
         estaCerrado: false,
