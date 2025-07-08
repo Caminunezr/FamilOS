@@ -73,36 +73,27 @@ class CalendarioPresupuestoViewModel: ObservableObject {
         errorMessage = nil
         
         Task {
-            do {
-                var mesesTemp: [MesPresupuestoInfo] = []
-                
-                for mes in 1...12 {
-                    let fechaMes = crearFechaMes(año: añoActual, mes: mes)
-                    let mesInfo = await crearMesInfo(
-                        fecha: fechaMes,
-                        mes: mes,
-                        año: añoActual,
-                        presupuestos: presupuestoViewModel.presupuestos,
-                        aportes: presupuestoViewModel.aportes,
-                        deudas: presupuestoViewModel.deudas
-                    )
-                    mesesTemp.append(mesInfo)
-                }
-                
-                await MainActor.run {
-                    self.mesesInfo = mesesTemp
-                    self.isLoading = false
-                }
-                
-                print("✅ Datos del calendario actualizados para el año \(añoActual)")
-                
-            } catch {
-                await MainActor.run {
-                    self.errorMessage = "Error al cargar datos: \(error.localizedDescription)"
-                    self.isLoading = false
-                }
-                print("❌ Error actualizando datos del calendario: \(error)")
+            var mesesTemp: [MesPresupuestoInfo] = []
+            
+            for mes in 1...12 {
+                let fechaMes = crearFechaMes(año: añoActual, mes: mes)
+                let mesInfo = await crearMesInfo(
+                    fecha: fechaMes,
+                    mes: mes,
+                    año: añoActual,
+                    presupuestos: presupuestoViewModel.presupuestos,
+                    aportes: presupuestoViewModel.aportes,
+                    deudas: presupuestoViewModel.deudas
+                )
+                mesesTemp.append(mesInfo)
             }
+            
+            await MainActor.run {
+                self.mesesInfo = mesesTemp
+                self.isLoading = false
+            }
+            
+            print("✅ Datos del calendario actualizados para el año \(añoActual)")
         }
     }
     

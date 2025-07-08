@@ -244,7 +244,7 @@ struct NuevaDeudaView: View {
                 Spacer()
             }
             
-            if let presupuesto = viewModel.presupuestoActual {
+            if viewModel.presupuestoActual != nil {
                 HStack {
                     Text("Saldo disponible:")
                         .font(.caption)
@@ -335,29 +335,21 @@ struct NuevaDeudaView: View {
         isLoading = true
         
         Task {
-            do {
-                // Create a DeudaItem instance
-                let nuevaDeuda = DeudaItem(
-                    descripcion: descripcion,
-                    monto: montoDouble,
-                    categoria: categoria,
-                    fechaRegistro: Date(),
-                    esPagado: false,
-                    responsable: responsable
-                )
-                
-                await viewModel.agregarDeuda(nuevaDeuda)
-                
-                await MainActor.run {
-                    isLoading = false
-                    dismiss()
-                }
-                
-            } catch {
-                await MainActor.run {
-                    isLoading = false
-                    mostrarError(mensaje: error.localizedDescription)
-                }
+            // Create a DeudaItem instance
+            let nuevaDeuda = DeudaItem(
+                descripcion: descripcion,
+                monto: montoDouble,
+                categoria: categoria,
+                fechaRegistro: Date(),
+                esPagado: false,
+                responsable: responsable
+            )
+            
+            viewModel.agregarDeuda(nuevaDeuda)
+            
+            await MainActor.run {
+                isLoading = false
+                dismiss()
             }
         }
     }

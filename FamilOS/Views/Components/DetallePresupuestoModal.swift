@@ -13,11 +13,14 @@ struct DetallePresupuestoModal: View {
     @State private var mostrarAlertaEliminarAporte = false
     @State private var aporteAEliminar: Aporte?
     @State private var vistaGastos: VistaGastos = .todos
+    @State private var transacciones: [TransaccionPago] = []
+    @State private var cargandoTransacciones = false
     
     enum VistaGastos: String, CaseIterable {
         case todos = "Todos"
         case pagados = "Pagados"
         case pendientes = "Pendientes"
+        case conAportes = "Con Aportes"
     }
     
     var body: some View {
@@ -36,6 +39,11 @@ struct DetallePresupuestoModal: View {
                     
                     // Gastos del mes mejorado
                     gastosDelMesMejorado
+                    
+                    // Sección de transacciones con aportes
+                    if !transacciones.isEmpty {
+                        seccionTransaccionesConAportes
+                    }
                 }
                 .padding(.horizontal)
             }
@@ -87,6 +95,9 @@ struct DetallePresupuestoModal: View {
             if let aporte = aporteAEliminar {
                 Text("¿Estás seguro de que quieres eliminar el aporte de \(aporte.monto.formatearComoMoneda()) de \(aporte.usuario)? Esta acción no se puede deshacer.")
             }
+        }
+        .task {
+            await cargarTransacciones()
         }
     }
     
@@ -211,7 +222,7 @@ struct DetallePresupuestoModal: View {
                     }
                 }
                 .pickerStyle(SegmentedPickerStyle())
-                .frame(width: 200)
+                .frame(width: 320)
             }
             
             if !presupuestoViewModel.deudasDelMes.isEmpty {
@@ -221,6 +232,11 @@ struct DetallePresupuestoModal: View {
                     
                     // Lista de gastos filtrada
                     listaGastosFiltrada
+                    
+                    // Mostrar transacciones con aportes si está seleccionado
+                    if vistaGastos == .conAportes {
+                        listaTransaccionesConAportes
+                    }
                 }
                 .padding()
                 .background {
@@ -233,46 +249,62 @@ struct DetallePresupuestoModal: View {
         }
     }
     
-    private var resumenGastos: some View {
-        HStack(spacing: 12) {
-            // Total general
-            CardResumenGasto(
-                titulo: "Total",
-                monto: totalGastos,
-                color: .blue,
-                icono: "creditcard"
-            )
+    // MARK: - Sección de Transacciones con Aportes
+    
+    private var seccionTransaccionesConAportes: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Text("Pagos Realizados con Aportes")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                
+                if cargandoTransacciones {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                }
+            }
             
-            // Pagado
-            CardResumenGasto(
-                titulo: "Pagado",
-                monto: totalPagado,
-                color: .green,
-                icono: "checkmark.circle.fill"
-            )
-            
-            // Pendiente
-            CardResumenGasto(
-                titulo: "Pendiente",
-                monto: totalPendiente,
-                color: .orange,
-                icono: "clock.fill"
-            )
+            if !transaccionesDelMes.isEmpty {
+                VStack(spacing: 8) {
+                    ForEach(transaccionesDelMes.prefix(5), id: \.id) { transaccion in
+                        TransaccionConAportesRow(transaccion: transaccion)
+                    }
+                    
+                    if transaccionesDelMes.count > 5 {
+                        Button("Ver todas (\(transaccionesDelMes.count) transacciones)") {
+                            // TODO: Mostrar todas las transacciones
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.blue)
+                    }
+                }
+            } else {
+                noDataView(mensaje: "No hay transacciones con aportes registradas")
+            }
+        }
+        .padding()
+        .background {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(.regularMaterial)
         }
     }
     
-    private var listaGastosFiltrada: some View {
+    private var listaTransaccionesConAportes: some View {
         VStack(spacing: 8) {
-            ForEach(gastosFiltrados) { deuda in
-                FilaActividadFinanciera(deuda: deuda)
-            }
-            
-            if gastosFiltrados.count < deudasSegunFiltro.count {
-                Button("Ver todos (\(deudasSegunFiltro.count) gastos)") {
-                    // Expandir lista completa
+            if !transaccionesDelMes.isEmpty {
+                ForEach(transaccionesDelMes.prefix(5), id: \.id) { transaccion in
+                    TransaccionConAportesRow(transaccion: transaccion)
                 }
-                .font(.caption)
-                .foregroundStyle(.blue)
+                
+                if transaccionesDelMes.count > 5 {
+                    Button("Ver todas (\(transaccionesDelMes.count) transacciones)") {
+                        // TODO: Mostrar todas las transacciones
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.blue)
+                }
+            } else {
+                noDataView(mensaje: "No hay transacciones con aportes este mes")
             }
         }
     }
@@ -286,11 +318,20 @@ struct DetallePresupuestoModal: View {
             return presupuestoViewModel.deudasDelMes.filter { $0.esPagado }
         case .pendientes:
             return presupuestoViewModel.deudasDelMes.filter { !$0.esPagado }
+        case .conAportes:
+            return presupuestoViewModel.deudasDelMes.filter { $0.esPagado }
         }
     }
     
     private var gastosFiltrados: [DeudaItem] {
         Array(deudasSegunFiltro.prefix(5)) // Mostrar máximo 5 elementos
+    }
+    
+    private var transaccionesDelMes: [TransaccionPago] {
+        let calendar = Calendar.current
+        return transacciones.filter { transaccion in
+            calendar.isDate(transaccion.fechaDate, equalTo: mesInfo.fecha, toGranularity: .month)
+        }.filter { !$0.aportesUtilizados.isEmpty }
     }
     
     private var totalGastos: Double {
@@ -305,10 +346,114 @@ struct DetallePresupuestoModal: View {
         presupuestoViewModel.deudasDelMes.filter { !$0.esPagado }.reduce(0) { $0 + $1.monto }
     }
     
+    // MARK: - Vistas Computadas
+    
+    private var resumenGastos: some View {
+        VStack(spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Total Gastos")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(totalGastos.formatearComoMoneda())
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.primary)
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("Pagado")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(totalPagado.formatearComoMoneda())
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.green)
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("Pendiente")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(totalPendiente.formatearComoMoneda())
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.red)
+                }
+            }
+            .padding()
+            .background {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.ultraThinMaterial)
+            }
+        }
+    }
+    
+    private var listaGastosFiltrada: some View {
+        VStack(spacing: 8) {
+            ForEach(gastosFiltrados, id: \.id) { deuda in
+                HStack {
+                    Image(systemName: deuda.esPagado ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(deuda.esPagado ? .green : .secondary)
+                        .frame(width: 20)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(deuda.descripcion)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        
+                        Text(deuda.fechaRegistro.formatted(.dateTime.day().month().year()))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Text(deuda.monto.formatearComoMoneda())
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(deuda.esPagado ? .green : .primary)
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .padding()
+        .background {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.ultraThinMaterial)
+        }
+    }
+    
     // MARK: - Acciones
     
     private func eliminarAporte(_ aporte: Aporte) {
         presupuestoViewModel.eliminarAporte(id: aporte.id)
+    }
+    
+    private func cargarTransacciones() async {
+        guard let familiaId = presupuestoViewModel.familiaId else { return }
+        
+        cargandoTransacciones = true
+        
+        do {
+            // Usar el servicio de Firebase directamente
+            let firebaseService = presupuestoViewModel.firebaseService
+            let transaccionesObtenidas = try await firebaseService.obtenerTransacciones(familiaId: familiaId)
+            
+            await MainActor.run {
+                self.transacciones = transaccionesObtenidas
+                self.cargandoTransacciones = false
+            }
+        } catch {
+            await MainActor.run {
+                print("Error cargando transacciones: \(error)")
+                self.cargandoTransacciones = false
+            }
+        }
     }
 }
 
@@ -492,5 +637,104 @@ struct DeudaResumenRow: View {
                 }
             }
         }
+    }
+}
+
+struct FilaTransaccionConAporte: View {
+    let transaccion: TransaccionPago
+    
+    var body: some View {
+        HStack {
+            // Icono de transacción
+            Image(systemName: "arrow.right.circle.fill")
+                .foregroundStyle(.blue)
+                .font(.title2)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(transaccion.descripcion)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                Text("Aporte de \(transaccion.usuario)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
+            Spacer()
+            
+            Text(transaccion.monto.formatearComoMoneda())
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(.blue)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct TransaccionConAportesRow: View {
+    let transaccion: TransaccionPago
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "creditcard.fill")
+                    .foregroundStyle(.blue)
+                    .frame(width: 20)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(transaccion.descripcion)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    
+                    Text("Pagado por: \(transaccion.usuario)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                
+                Spacer()
+                
+                Text(transaccion.monto.formatearComoMoneda())
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.blue)
+            }
+            
+            // Mostrar aportes utilizados
+            if !transaccion.aportesUtilizados.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Aportes utilizados:")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    
+                    ForEach(transaccion.aportesUtilizados, id: \.aporteId) { aporteUtilizado in
+                        HStack {
+                            Image(systemName: "arrow.right")
+                                .font(.caption2)
+                                .foregroundStyle(.green)
+                            
+                            Text(aporteUtilizado.usuarioAporte)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            
+                            Spacer()
+                            
+                            Text(aporteUtilizado.montoUtilizado.formatearComoMoneda())
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.green)
+                        }
+                        .padding(.leading, 8)
+                    }
+                }
+                .padding(.top, 4)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(.green.opacity(0.1))
+                }
+            }
+        }
+        .padding(.vertical, 4)
     }
 }

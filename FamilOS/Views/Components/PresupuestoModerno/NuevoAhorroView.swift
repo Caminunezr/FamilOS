@@ -277,21 +277,13 @@ struct NuevoAhorroView: View {
         isLoading = true
         
         Task {
-            do {
-                // Simulate creating a savings goal for now
-                // In the future, this would call a real method on the ViewModel
-                print("Creating savings goal: \(nombre) for \(montoDouble)")
-                
-                await MainActor.run {
-                    isLoading = false
-                    dismiss()
-                }
-                
-            } catch {
-                await MainActor.run {
-                    isLoading = false
-                    mostrarError(mensaje: error.localizedDescription)
-                }
+            // Simulate creating a savings goal for now
+            // In the future, this would call a real method on the ViewModel
+            print("Creating savings goal: \(nombre) for \(montoDouble)")
+            
+            await MainActor.run {
+                isLoading = false
+                dismiss()
             }
         }
     }

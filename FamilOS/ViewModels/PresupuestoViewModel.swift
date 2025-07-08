@@ -173,7 +173,7 @@ class PresupuestoViewModel: ObservableObject {
     
     func cargarDatosFamiliares() {
         // Este método ahora solo inicia los observadores si no están ya iniciados
-        guard let familiaId = familiaId else { return }
+        guard familiaId != nil else { return }
         
         if observadorAportesHandle == nil {
             iniciarObservadores()
@@ -346,7 +346,6 @@ class PresupuestoViewModel: ObservableObject {
     func crearPresupuestoMes() async {
         guard let usuario = authViewModel?.usuarioActual?.nombre else { return }
         
-        let calendar = Calendar.current
         let nuevoPresupuesto = PresupuestoMensual(
             fechaMes: mesSeleccionado,
             creador: usuario,
@@ -1271,16 +1270,10 @@ class PresupuestoViewModel: ObservableObject {
             error = nil
         }
         
-        do {
-            // Simplemente asegurarnos que los datos estén cargados (observadores)
-            if let familiaId = familiaId {
-                if observadorAportesHandle == nil {
-                    iniciarObservadores()
-                }
-            }
-        } catch {
-            await MainActor.run {
-                self.error = "Error cargando datos: \(error.localizedDescription)"
+        // Simplemente asegurarnos que los datos estén cargados (observadores)
+        if familiaId != nil {
+            if observadorAportesHandle == nil {
+                iniciarObservadores()
             }
         }
         
@@ -1302,7 +1295,7 @@ class PresupuestoViewModel: ObservableObject {
     // MARK: - Método para cerrar mes
     
     func cerrarMes() async {
-        guard let presupuestoActual = presupuestoActual else { return }
+        guard presupuestoActual != nil else { return }
         
         await MainActor.run {
             isPerformingAction = true

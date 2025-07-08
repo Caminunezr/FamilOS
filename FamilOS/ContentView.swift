@@ -177,7 +177,7 @@ struct MainTabView: View {
         .onAppear {
             configurarViewModels()
         }
-        .onChange(of: authViewModel.familiaActual) { _ in
+        .onChange(of: authViewModel.familiaActual) {
             configurarViewModels()
         }
         .toolbar {

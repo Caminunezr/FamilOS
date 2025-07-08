@@ -165,7 +165,7 @@ struct NuevoAporteView: View {
                 Spacer()
             }
             
-            if let presupuesto = viewModel.presupuestoActual {
+            if viewModel.presupuestoActual != nil {
                 HStack {
                     Text("Presupuesto actual:")
                         .font(.caption)
@@ -254,27 +254,19 @@ struct NuevoAporteView: View {
         isLoading = true
         
         Task {
-            do {
-                // Crear el objeto Aporte
-                let nuevoAporte = Aporte(
-                    presupuestoId: viewModel.presupuestoActual?.id ?? "",
-                    usuario: usuarioSeleccionado,
-                    monto: montoDouble,
-                    comentario: comentario.isEmpty ? "" : comentario
-                )
-                
-                viewModel.agregarAporte(nuevoAporte)
-                
-                await MainActor.run {
-                    isLoading = false
-                    dismiss()
-                }
-                
-            } catch {
-                await MainActor.run {
-                    isLoading = false
-                    mostrarError(mensaje: error.localizedDescription)
-                }
+            // Crear el objeto Aporte
+            let nuevoAporte = Aporte(
+                presupuestoId: viewModel.presupuestoActual?.id ?? "",
+                usuario: usuarioSeleccionado,
+                monto: montoDouble,
+                comentario: comentario.isEmpty ? "" : comentario
+            )
+            
+            viewModel.agregarAporte(nuevoAporte)
+            
+            await MainActor.run {
+                isLoading = false
+                dismiss()
             }
         }
     }
