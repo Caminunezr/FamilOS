@@ -16,6 +16,10 @@ struct ConfiguracionView: View {
     @State private var nombreEditable = ""
     @State private var estaEditandoNombre = false
     
+    // Estados para confirmación de cambio de moneda
+    @State private var mostrarConfirmacionMoneda = false
+    @State private var nuevaMonedaSeleccionada: TipoMoneda?
+    
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -256,7 +260,16 @@ struct ConfiguracionView: View {
                         Menu {
                             ForEach(TipoMoneda.allCases) { moneda in
                                 Button(action: { 
-                                    configuracionService.cambiarMoneda(moneda)
+                                    if moneda != configuracionService.monedaSeleccionada {
+                                        nuevaMonedaSeleccionada = moneda
+                                        configuracionService.cambiarMoneda(moneda)
+                                        mostrarConfirmacionMoneda = true
+                                        
+                                        // Ocultar el mensaje después de 3 segundos
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                                            mostrarConfirmacionMoneda = false
+                                        }
+                                    }
                                 }) {
                                     HStack {
                                         Text(moneda.bandera)
@@ -359,6 +372,11 @@ struct ConfiguracionView: View {
                         }
                     }
                 }
+            }
+            
+            // Mensaje de confirmación de cambio de moneda
+            if mostrarConfirmacionMoneda {
+                mensajeConfirmacionMoneda
             }
             
             // Botón de cerrar sesión
@@ -593,6 +611,54 @@ struct ConfiguracionView: View {
                 }
             }
         }
+    }
+    
+    // MARK: - Mensaje de confirmación de cambio de moneda
+    
+    private var mensajeConfirmacionMoneda: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 20))
+                .foregroundColor(.green)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Moneda actualizada")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                
+                if let nuevaMoneda = nuevaMonedaSeleccionada {
+                    Text("Se cambió a \(nuevaMoneda.nombre) (\(nuevaMoneda.simbolo))")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                }
+            }
+            
+            Spacer()
+            
+            Button(action: {
+                mostrarConfirmacionMoneda = false
+            }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.green.opacity(0.2))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.green.opacity(0.4), lineWidth: 1)
+                )
+        )
+        .transition(.asymmetric(
+            insertion: .scale.combined(with: .opacity),
+            removal: .opacity
+        ))
+        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: mostrarConfirmacionMoneda)
     }
 }
 
