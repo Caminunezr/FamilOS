@@ -159,7 +159,7 @@ struct SelectorAñoView: View {
             
             Spacer()
             
-            Text("\(añoSeleccionado)")
+            Text(String(añoSeleccionado))
                 .font(.title2)
                 .fontWeight(.semibold)
                 .contentTransition(.numericText())

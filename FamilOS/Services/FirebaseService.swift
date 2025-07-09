@@ -329,6 +329,10 @@ final class FirebaseService {
         }
     }
     
+    func eliminarTransaccion(familiaId: String, transaccionId: String) async throws {
+        try await database.child("familias").child(familiaId).child("transacciones").child(transaccionId).removeValue()
+    }
+    
     // MARK: - Observadores en tiempo real
     
     func observarCuentas(familiaId: String, completion: @escaping ([Cuenta]) -> Void) -> DatabaseHandle {

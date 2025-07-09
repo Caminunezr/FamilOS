@@ -24,7 +24,7 @@ struct ModalRegistrarGasto: View {
                         .font(.title2)
                         .fontWeight(.bold)
                     
-                    Text("Mes de \(mesInfo.nombre) \(mesInfo.año)")
+                    Text("Mes de \(mesInfo.nombre) \(String(mesInfo.año))")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }

@@ -7,6 +7,7 @@ import Network
 @main
 struct FamilOSApp: App {
     @StateObject private var authViewModel = AuthViewModel()
+    @StateObject private var configuracionService = ConfiguracionService.shared
     
     init() {
         FirebaseApp.configure()
@@ -17,6 +18,7 @@ struct FamilOSApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(authViewModel)
+                .environmentObject(configuracionService)
                 .onAppear {
                     checkSystemStatus()
                 }

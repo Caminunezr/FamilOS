@@ -138,7 +138,7 @@ struct CalendarioPresupuestoView: View {
     
     private var resumenAnualView: some View {
         VStack(spacing: 16) {
-            Text("Resumen \(viewModel.añoActual)")
+            Text("Resumen \(String(viewModel.añoActual))")
                 .font(.title2)
                 .fontWeight(.bold)
             
@@ -224,7 +224,7 @@ struct EstadisticasAnualesView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    Text("Estadísticas de \(año)")
+                    Text("Estadísticas de \(String(año))")
                         .font(.largeTitle)
                         .fontWeight(.bold)
                     

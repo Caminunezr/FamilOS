@@ -2198,7 +2198,7 @@ struct AñoHeaderView: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("\(añoCuentas.año)")
+                Text(String(añoCuentas.año))
                     .font(.title2)
                     .fontWeight(.bold)
                 

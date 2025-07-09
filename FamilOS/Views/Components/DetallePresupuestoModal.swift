@@ -4,6 +4,7 @@ struct DetallePresupuestoModal: View {
     let mesInfo: MesPresupuestoInfo
     @EnvironmentObject var presupuestoViewModel: PresupuestoViewModel
     @EnvironmentObject var authViewModel: AuthViewModel
+    @EnvironmentObject var configuracionService: ConfiguracionService
     @Environment(\.dismiss) private var dismiss
     
     @State private var mostrarVistaCompleta = false
@@ -15,6 +16,10 @@ struct DetallePresupuestoModal: View {
     @State private var vistaGastos: VistaGastos = .todos
     @State private var transacciones: [TransaccionPago] = []
     @State private var cargandoTransacciones = false
+    
+    // Estados para eliminar transacciones
+    @State private var mostrarAlertaEliminarTransaccion = false
+    @State private var transaccionAEliminar: TransaccionPago?
     
     enum VistaGastos: String, CaseIterable {
         case todos = "Todos"
@@ -94,6 +99,18 @@ struct DetallePresupuestoModal: View {
         } message: {
             if let aporte = aporteAEliminar {
                 Text("¿Estás seguro de que quieres eliminar el aporte de \(aporte.monto.formatearComoMoneda()) de \(aporte.usuario)? Esta acción no se puede deshacer.")
+            }
+        }
+        .alert("Eliminar Transacción", isPresented: $mostrarAlertaEliminarTransaccion) {
+            Button("Cancelar", role: .cancel) { }
+            Button("Eliminar", role: .destructive) {
+                if let transaccion = transaccionAEliminar {
+                    eliminarTransaccion(transaccion)
+                }
+            }
+        } message: {
+            if let transaccion = transaccionAEliminar {
+                Text("¿Estás seguro de que quieres eliminar la transacción '\(transaccion.descripcion)' de \(transaccion.monto.formatearComoMoneda())? Esta acción no se puede deshacer y los aportes utilizados volverán a estar disponibles.")
             }
         }
         .task {
@@ -267,7 +284,10 @@ struct DetallePresupuestoModal: View {
             if !transaccionesDelMes.isEmpty {
                 VStack(spacing: 8) {
                     ForEach(transaccionesDelMes.prefix(5), id: \.id) { transaccion in
-                        TransaccionConAportesRow(transaccion: transaccion)
+                        TransaccionConAportesRow(transaccion: transaccion) {
+                            transaccionAEliminar = transaccion
+                            mostrarAlertaEliminarTransaccion = true
+                        }
                     }
                     
                     if transaccionesDelMes.count > 5 {
@@ -293,7 +313,10 @@ struct DetallePresupuestoModal: View {
         VStack(spacing: 8) {
             if !transaccionesDelMes.isEmpty {
                 ForEach(transaccionesDelMes.prefix(5), id: \.id) { transaccion in
-                    TransaccionConAportesRow(transaccion: transaccion)
+                    TransaccionConAportesRow(transaccion: transaccion) {
+                        transaccionAEliminar = transaccion
+                        mostrarAlertaEliminarTransaccion = true
+                    }
                 }
                 
                 if transaccionesDelMes.count > 5 {
@@ -432,6 +455,32 @@ struct DetallePresupuestoModal: View {
     
     private func eliminarAporte(_ aporte: Aporte) {
         presupuestoViewModel.eliminarAporte(id: aporte.id)
+    }
+    
+    private func eliminarTransaccion(_ transaccion: TransaccionPago) {
+        Task {
+            do {
+                guard let familiaId = presupuestoViewModel.familiaId else { return }
+                
+                // Eliminar la transacción usando el servicio de Firebase
+                let firebaseService = presupuestoViewModel.firebaseService
+                try await firebaseService.eliminarTransaccion(familiaId: familiaId, transaccionId: transaccion.id)
+                
+                // Actualizar la lista local
+                await MainActor.run {
+                    self.transacciones.removeAll { $0.id == transaccion.id }
+                }
+                
+                // Recargar datos para reflejar los cambios
+                await cargarTransacciones()
+                
+            } catch {
+                await MainActor.run {
+                    print("Error eliminando transacción: \(error)")
+                    // Aquí podrías mostrar un error al usuario
+                }
+            }
+        }
     }
     
     private func cargarTransacciones() async {
@@ -673,6 +722,7 @@ struct FilaTransaccionConAporte: View {
 
 struct TransaccionConAportesRow: View {
     let transaccion: TransaccionPago
+    let onEliminar: () -> Void
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -697,6 +747,15 @@ struct TransaccionConAportesRow: View {
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundStyle(.blue)
+                
+                // Botón de eliminar
+                Button(action: onEliminar) {
+                    Image(systemName: "trash")
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .padding(.leading, 8)
             }
             
             // Mostrar aportes utilizados

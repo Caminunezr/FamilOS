@@ -120,12 +120,27 @@ extension Date {
 // MARK: - Helpers para formateo
 
 extension Double {
+    @MainActor
     func formatearComoMoneda() -> String {
+        let configuracion = ConfiguracionService.shared
+        let moneda = configuracion.monedaSeleccionada
+        
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = "EUR"
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: self)) ?? "€0"
+        formatter.currencyCode = moneda.codigo
+        formatter.locale = Locale(identifier: moneda.localeIdentifier)
+        
+        // Configurar decimales según la moneda
+        switch moneda {
+        case .yen:
+            formatter.maximumFractionDigits = 0
+        case .chileno, .peso_colombiano, .peso_argentino:
+            formatter.maximumFractionDigits = 0
+        default:
+            formatter.maximumFractionDigits = 2
+        }
+        
+        return formatter.string(from: NSNumber(value: self)) ?? "\(moneda.simbolo)\(self)"
     }
 }
 
